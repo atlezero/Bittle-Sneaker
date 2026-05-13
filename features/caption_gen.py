@@ -4,9 +4,6 @@ import google.generativeai as genai
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
-
 def generate_captions(product_name, price):
     prompt = f"""
     เขียนแคปชั่นขายของภาษาไทย
@@ -20,8 +17,10 @@ def generate_captions(product_name, price):
     Gen-Z: <ข้อความ>
     """
 
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel("gemini-3.1-flash-lite-preview")
     response = model.generate_content(prompt)
     return response.text.strip()
 
-# test
-print(generate_captions("เสื้อยืด oversize สีดำ", 299))
+if __name__ == "__main__":
+    print(generate_captions("เสื้อยืด oversize สีดำ", 299))

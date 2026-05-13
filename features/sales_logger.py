@@ -1,10 +1,18 @@
 import argparse
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
-from sheets_client import get_sheet
+try:
+    from features.sheets_client import get_sheet
+except ModuleNotFoundError as exc:
+    if exc.name != "features":
+        raise
+    from sheets_client import get_sheet
+
+
+THAI_TZ = timezone(timedelta(hours=7))
 
 
 def parse_sale_item(item: str) -> tuple[str, int, float]:
@@ -50,7 +58,7 @@ def main() -> int:
         return 1
 
     total = quantity * price
-    today = datetime.utcnow().date().isoformat()
+    today = datetime.now(THAI_TZ).date().isoformat()
     row = [today, menu, quantity, price, total]
 
     try:

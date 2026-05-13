@@ -1,0 +1,1 @@
+# Tests for milk-on-the-beach project
