@@ -6,10 +6,16 @@ from datetime import datetime, timedelta, timezone
 import requests
 from dotenv import load_dotenv
 
-from sheets_client import get_sheet
+try:
+    from features.sheets_client import get_sheet
+except ModuleNotFoundError as exc:
+    if exc.name != "features":
+        raise
+    from sheets_client import get_sheet
 
 
 DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"]
+THAI_TZ = timezone(timedelta(hours=7))
 
 
 def parse_date(value: str) -> datetime.date:
@@ -54,7 +60,7 @@ def build_summary(rows: list[list[str]]) -> str:
             "กรุณาตรวจสอบว่ามีคอลัมน์ วันที่, เมนู, จำนวน หรือ ยอดรวม อยู่ในสเปรดชีต"
         )
 
-    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    yesterday = datetime.now(THAI_TZ).date() - timedelta(days=1)
     filtered = []
     for row in data_rows:
         if len(row) <= date_col:
