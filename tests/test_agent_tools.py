@@ -1,9 +1,8 @@
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 import gspread
-
-from google.oauth2.service_account import Credentials
 
 from features.agent_tools import (
     log_sale,
@@ -41,13 +40,18 @@ def get_test_sheet():
 
 @pytest.fixture(autouse=True)
 def patch_sheet(monkeypatch):
-
+    mock_sheet = MagicMock()
+    # Mock get_all_values สำหรับ get_sales_today
+    mock_sheet.get_all_values.return_value = [
+        ["วันที่", "เมนู", "จำนวน", "ราคา", "ยอดรวม"],
+        ["2024-01-01T12:00:00+07:00", "ชานม", "1", "50", "50"]
+    ]
+    
     monkeypatch.setattr(
         "features.agent_tools._get_sheet",
-        get_test_sheet,
+        lambda: mock_sheet
     )
-
-    yield
+    return mock_sheet
 
 
 # ─────────────────────────────────────────────────────────────

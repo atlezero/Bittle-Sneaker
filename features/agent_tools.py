@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
+from .sheets_client import get_sheet
 
 # ── Path setup ────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -24,24 +25,7 @@ THAI_TZ = ZoneInfo("Asia/Bangkok")
 
 
 def _get_sheet() -> gspread.Worksheet:
-
-    creds = Credentials.from_service_account_file(
-        str(PROJECT_ROOT / "service-account.json"),
-        scopes=SCOPES,
-    )
-
-    gc = gspread.authorize(creds)
-
-    spreadsheet_id = os.getenv("GOOGLE_SHEETS_ID")
-
-    if not spreadsheet_id:
-        raise EnvironmentError(
-            "GOOGLE_SHEETS_ID ไม่พบใน .env"
-        )
-
-    spreadsheet = gc.open_by_key(spreadsheet_id)
-
-    return spreadsheet.sheet1
+    return get_sheet()
 
 
 # ─────────────────────────────────────────────────────────────
