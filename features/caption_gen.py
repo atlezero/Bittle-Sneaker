@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
-load_dotenv()
+# ── Path setup ────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ─────────────────────────────────────────────────────────────
 # Gemini setup
@@ -19,6 +23,19 @@ MODEL = "gemini-3.1-flash-lite-preview"
 # ─────────────────────────────────────────────────────────────
 # Generate captions
 # ─────────────────────────────────────────────────────────────
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception(lambda e: "503" in str(e) or "UNAVAILABLE" in str(e).upper()),
+    reraise=True
+)
+def _call_gemini_caption(prompt):
+    return client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+    )
+
 
 def generate_captions(product_name: str, price: int) -> str:
 
@@ -42,10 +59,7 @@ def generate_captions(product_name: str, price: int) -> str:
     Gen-Z: <ข้อความ>
     """
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-    )
+    response = _call_gemini_caption(prompt)
 
     return response.text.strip()
 

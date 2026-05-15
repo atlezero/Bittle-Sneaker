@@ -1,12 +1,15 @@
 import os
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import gspread
 from dotenv import load_dotenv
 from google.oauth2.service_account import Credentials
 
-load_dotenv()
+# ── Path setup ────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 # ─────────────────────────────────────────────────────────────
 # Google Sheets setup
@@ -23,7 +26,7 @@ THAI_TZ = ZoneInfo("Asia/Bangkok")
 def _get_sheet() -> gspread.Worksheet:
 
     creds = Credentials.from_service_account_file(
-        "service-account.json",
+        str(PROJECT_ROOT / "service-account.json"),
         scopes=SCOPES,
     )
 
@@ -127,7 +130,7 @@ def log_sale(
     total = quantity * price
 
     now = datetime.now(THAI_TZ)
-
+    # บันทึกเวลาแบบ ISO 8601 เต็มรูปแบบ (2026-05-15T00:12:23.544407+07:00)
     timestamp = now.isoformat()
 
     sheet = _get_sheet()

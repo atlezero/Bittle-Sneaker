@@ -1,4 +1,3 @@
-id="s3u7qp"
 from unittest.mock import Mock, patch
 
 from features.agent_harness import run_agent

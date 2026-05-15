@@ -5,3 +5,5 @@ pytest
 pytest-mock
 gspread
 google-auth
+tzdata
+tenacity

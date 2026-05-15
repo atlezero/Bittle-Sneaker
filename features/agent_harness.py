@@ -2,15 +2,22 @@
 
 import json
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+
+# ── Path setup ────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+load_dotenv(PROJECT_ROOT / ".env")
 
 from features.agent_tools import TOOLS
-
-load_dotenv()
 
 # ─────────────────────────────────────────────────────────────
 # Gemini setup
@@ -53,7 +60,7 @@ SYSTEM_INSTRUCTION = """
 # Trace log
 # ─────────────────────────────────────────────────────────────
 
-TRACE_FILE = "agent_trace.log"
+TRACE_FILE = str(PROJECT_ROOT / "agent_trace.log")
 
 
 def write_trace(
@@ -115,49 +122,53 @@ def parse_action_response(raw: str) -> dict:
 # Format sales summary
 # ─────────────────────────────────────────────────────────────
 
-def format_sales_today(
-    result: dict,
-) -> str:
+def format_sales_today(result: dict) -> str:
+    total = result.get("total_revenue", 0.0)
+    count = result.get("total_items", 0)
+    summary = result.get("menu_summary", {})
 
-    total = result.get(
-        "total_revenue",
-        0.0,
-    )
+    if not summary:
+        return "📊 ยังไม่มียอดขายสำหรับวันนี้ค่ะ"
 
-    count = result.get(
-        "total_items",
-        0,
-    )
+    lines = ["📊 **สรุปยอดขายวันนี้**", "---"]
 
-    summary = result.get(
-        "menu_summary",
-        {},
-    )
+    # รายละเอียดแต่ละเมนู
+    for menu, data in summary.items():
+        lines.append(f"• {menu}: {data['quantity']} แก้ว (รวม {data['total']:.2f} บาท)")
 
-    best = max(
-        summary,
-        key=lambda m: summary[m]["total"],
-        default=None,
-    )
+    lines.append("---")
+    lines.append(f"💰 **ยอดรวมทั้งหมด:** {total:.2f} บาท")
+    lines.append(f"🥤 **จำนวนรวม:** {count} แก้ว")
 
-    best_part = (
-        f" | เมนูทำเงินสูงสุด: "
-        f"{best} "
-        f"({summary[best]['total']:.0f} บาท)"
-        if best else ""
-    )
+    # หาเมนูขายดี (ตามจำนวน)
+    best_qty_menu = max(summary, key=lambda m: summary[m]["quantity"], default=None)
+    if best_qty_menu:
+        lines.append(f"🏆 **ขายดีที่สุด:** {best_qty_menu} ({summary[best_qty_menu]['quantity']} แก้ว)")
 
-    return (
-        f"📊 ยอดขายวันนี้: "
-        f"{total:.2f} บาท "
-        f"({count} รายการ)"
-        f"{best_part}"
-    )
+    return "\n".join(lines)
+
 
 
 # ─────────────────────────────────────────────────────────────
 # Main agent
 # ─────────────────────────────────────────────────────────────
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception(lambda e: "503" in str(e) or "UNAVAILABLE" in str(e).upper()),
+    reraise=True
+)
+def _call_gemini(prompt):
+    return client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config={
+            "system_instruction": SYSTEM_INSTRUCTION,
+            "response_mime_type": "application/json",
+        },
+    )
+
 
 def run_agent(
     user_input: str,
@@ -169,14 +180,7 @@ def run_agent(
     )
 
     try:
-
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=(
-                f"{SYSTEM_INSTRUCTION}\n\n"
-                f"คำสั่ง: {user_input}"
-            ),
-        )
+        response = _call_gemini(user_input)
 
     except Exception as e:
 
@@ -195,91 +199,49 @@ def run_agent(
     )
 
     try:
-
-        action_data = parse_action_response(
-            raw
-        )
-
+        action_data = parse_action_response(raw)
     except json.JSONDecodeError as e:
+        write_trace("parse_error", {"raw": raw, "error": str(e)})
+        return "❌ AI ตอบกลับในรูปแบบที่ไม่ถูกต้อง"
 
-        write_trace(
-            "parse_error",
-            {
-                "raw": raw,
-                "error": str(e),
-            },
-        )
+    # แปลงให้เป็น list เสมอเพื่อความง่ายในการวนลูป
+    if isinstance(action_data, dict):
+        actions = [action_data]
+    elif isinstance(action_data, list):
+        actions = action_data
+    else:
+        return "❌ AI ตอบกลับด้วยข้อมูลที่ไม่รองรับ"
 
-        return (
-            "❌ AI ตอบกลับ"
-            "ในรูปแบบที่ไม่ถูกต้อง"
-        )
+    results_text = []
 
-    action = action_data.get("action")
+    for item in actions:
+        action = item.get("action")
+        args = item.get("args", {})
 
-    args = action_data.get(
-        "args",
-        {},
-    )
+        if action not in TOOLS:
+            write_trace("unknown_action", {"action": action})
+            results_text.append(f"⚠️ ไม่รู้จัก action: {action}")
+            continue
 
-    if action not in TOOLS:
+        try:
+            result = TOOLS[action](**args)
+            write_trace("tool_result", {"action": action, "args": args, "result": result})
 
-        write_trace(
-            "unknown_action",
-            {"action": action},
-        )
+            if action == "log_sale":
+                results_text.append(
+                    f"✅ บันทึกสำเร็จ: {result['menu']} "
+                    f"{result['quantity']} แก้ว (รวม {result['total']} บาท)"
+                )
+            elif action == "get_sales_today":
+                results_text.append(format_sales_today(result))
+            else:
+                results_text.append(f"✅ ทำการ {action} สำเร็จ")
 
-        return (
-            f"⚠️ ไม่รู้จัก action: "
-            f"{action}"
-        )
+        except Exception as e:
+            write_trace("tool_error", {"action": action, "args": args, "error": str(e)})
+            results_text.append(f"❌ เกิดข้อผิดพลาดใน {action}: {e}")
 
-    try:
-
-        result = TOOLS[action](**args)
-
-        write_trace(
-            "tool_result",
-            {
-                "action": action,
-                "result": result,
-            },
-        )
-
-        if action == "log_sale":
-
-            return (
-                f"✅ บันทึกสำเร็จ: "
-                f"{result['menu']} "
-                f"x{result['quantity']} "
-                f"= {result['total']} บาท"
-            )
-
-        if action == "get_sales_today":
-
-            return format_sales_today(
-                result
-            )
-
-        return f"✅ ผลลัพธ์: {result}"
-
-    except (
-        ValueError,
-        TypeError,
-        FileNotFoundError,
-    ) as e:
-
-        write_trace(
-            "tool_error",
-            {
-                "action": action,
-                "error": str(e),
-            },
-        )
-
-        return (
-            f"❌ ข้อมูลไม่ถูกต้อง: {e}"
-        )
+    return "\n".join(results_text)
 
 
 # ─────────────────────────────────────────────────────────────

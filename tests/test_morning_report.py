@@ -51,16 +51,17 @@ class TestFindColumn:
 class TestBuildSummary:
     @patch("features.morning_report.datetime")
     def test_build_summary_with_data(self, mock_datetime):
-        mock_datetime.now.return_value = datetime(
-            2024, 1, 14, tzinfo=timezone.utc
-        )
+        # Mock datetime.now(THAI_TZ)
+        mock_now = datetime(2024, 1, 14, 8, 0, 0, tzinfo=THAI_TZ)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
         mock_datetime.strptime.side_effect = datetime.strptime
 
         rows = [
             ["วันที่", "เมนู", "จำนวน", "ราคา", "ยอดรวม"],
-            ["2024-01-13", "กาแฟ", "2", "45", "90"],
-            ["2024-01-13", "ชานม", "1", "50", "50"],
-            ["2024-01-13", "กาแฟ", "1", "45", "45"],
+            ["2024-01-13T10:00:00+07:00", "กาแฟ", "2", "45", "90"],
+            ["2024-01-13T11:00:00+07:00", "ชานม", "1", "50", "50"],
+            ["2024-01-13T12:00:00+07:00", "กาแฟ", "1", "45", "45"],
         ]
 
         result = build_summary(rows)
@@ -68,7 +69,9 @@ class TestBuildSummary:
         mock_datetime.now.assert_called_once_with(THAI_TZ)
         assert "สรุปยอดขายเมื่อวานน้า~ 🧸" in result
         assert "ยอดรวมทั้งหมด: 185.00 บาท" in result
-        assert "เมนูที่ขายดีที่สุด: กาแฟ (3 ชิ้น)" in result
+        assert "กาแฟ: 3 แก้ว" in result
+        assert "ชานม: 1 แก้ว" in result
+        assert "ขายดีที่สุด: กาแฟ (3 ชิ้น)" in result
 
     @patch("features.morning_report.datetime")
     def test_build_summary_no_sales(self, mock_datetime):

@@ -1,4 +1,3 @@
-id="k1v4sd"
 import os
 
 import pytest
