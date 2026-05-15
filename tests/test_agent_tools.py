@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import gspread
+from google.oauth2.service_account import Credentials
 
 from features.agent_tools import (
     log_sale,
@@ -34,30 +35,28 @@ def get_test_sheet():
     return spreadsheet.worksheet("test")
 
 
-# ─────────────────────────────────────────────────────────────
-# monkey patch _get_sheet
-# ─────────────────────────────────────────────────────────────
+# Check if credentials exist for integration tests
+CREDENTIALS_EXIST = (
+    os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON") is not None or 
+    os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE") is not None
+)
 
 @pytest.fixture(autouse=True)
-def patch_sheet(monkeypatch):
-    mock_sheet = MagicMock()
-    # Mock get_all_values สำหรับ get_sales_today
-    mock_sheet.get_all_values.return_value = [
-        ["วันที่", "เมนู", "จำนวน", "ราคา", "ยอดรวม"],
-        ["2024-01-01T12:00:00+07:00", "ชานม", "1", "50", "50"]
-    ]
-    
+def setup_integration(monkeypatch):
+    # เปลี่ยนไปใช้ฟังก์ชันต่อชีทจริงที่เรามีอยู่แล้วในไฟล์นี้ (get_test_sheet)
     monkeypatch.setattr(
         "features.agent_tools._get_sheet",
-        lambda: mock_sheet
+        get_test_sheet,
     )
-    return mock_sheet
+    yield
 
 
 # ─────────────────────────────────────────────────────────────
 # tests
 # ─────────────────────────────────────────────────────────────
 
+@pytest.mark.integration
+@pytest.mark.skipif(not CREDENTIALS_EXIST, reason="ไม่พบ Google Credentials (JSON หรือ FILE)")
 def test_log_sale_success():
 
     result = log_sale(
@@ -73,6 +72,8 @@ def test_log_sale_success():
     assert result["total"] == 100
 
 
+@pytest.mark.integration
+@pytest.mark.skipif(not CREDENTIALS_EXIST, reason="ไม่พบ Google Credentials (JSON หรือ FILE)")
 def test_log_sale_invalid_quantity():
 
     with pytest.raises(ValueError):
@@ -83,6 +84,8 @@ def test_log_sale_invalid_quantity():
         )
 
 
+@pytest.mark.integration
+@pytest.mark.skipif(not CREDENTIALS_EXIST, reason="ไม่พบ Google Credentials (JSON หรือ FILE)")
 def test_log_sale_invalid_price():
 
     with pytest.raises(ValueError):
@@ -93,6 +96,8 @@ def test_log_sale_invalid_price():
         )
 
 
+@pytest.mark.integration
+@pytest.mark.skipif(not CREDENTIALS_EXIST, reason="ไม่พบ Google Credentials (JSON หรือ FILE)")
 def test_get_sales_today():
 
     result = get_sales_today()
