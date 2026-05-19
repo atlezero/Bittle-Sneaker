@@ -6,11 +6,20 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 from google import genai
+from PIL import Image
 
 # ── Path setup ────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
+
+# ── Page config (ต้องเป็นคำสั่งแรกสุด) ─────────────────────
+_logo = Image.open(PROJECT_ROOT / "pictures" / "logo.png")
+st.set_page_config(
+    page_title="Milk On The Beach",
+    page_icon=_logo,
+    layout="centered",
+)
 
 from features.rag_engine import RAGEngine
 from features.agent_harness import write_trace

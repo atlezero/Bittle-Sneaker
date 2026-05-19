@@ -8,5 +8,6 @@ google-auth
 tzdata
 tenacity
 streamlit
+Pillow
 sentence-transformers
 faiss-cpu
