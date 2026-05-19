@@ -1,15 +1,17 @@
 import argparse
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-try:
-    from features.sheets_client import get_sheet
-except ModuleNotFoundError as exc:
-    if exc.name != "features":
-        raise
-    from sheets_client import get_sheet
+# ── Path setup ────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+load_dotenv(PROJECT_ROOT / ".env")
+
+from features.sheets_client import get_sheet
 
 
 THAI_TZ = timezone(timedelta(hours=7))
@@ -58,8 +60,9 @@ def main() -> int:
         return 1
 
     total = quantity * price
-    today = datetime.now(THAI_TZ).date().isoformat()
-    row = [today, menu, quantity, price, total]
+    # บันทึกเวลาแบบ ISO 8601 เต็มรูปแบบ (2026-05-15T00:12:23.544407+07:00)
+    now_iso = datetime.now(THAI_TZ).isoformat()
+    row = [now_iso, menu, quantity, price, total]
 
     try:
         sheet = get_sheet()

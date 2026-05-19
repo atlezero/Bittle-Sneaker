@@ -17,8 +17,9 @@ def isolated_env() -> dict[str, str]:
         "TELEGRAM_BOT_TOKEN": "fake-token",
         "TELEGRAM_CHAT_ID": "fake-chat-id",
     }
-    if "SYSTEMROOT" in os.environ:
-        env["SYSTEMROOT"] = os.environ["SYSTEMROOT"]
+    for var in ("SYSTEMROOT", "APPDATA", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"):
+        if var in os.environ:
+            env[var] = os.environ[var]
     return env
 
 

@@ -2,16 +2,18 @@ import os
 import sys
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-try:
-    from features.sheets_client import get_sheet
-except ModuleNotFoundError as exc:
-    if exc.name != "features":
-        raise
-    from sheets_client import get_sheet
+# ── Path setup ────────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+load_dotenv(PROJECT_ROOT / ".env")
+
+from features.sheets_client import get_sheet
 
 
 DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"]
@@ -23,6 +25,12 @@ def parse_date(value: str) -> datetime.date:
     if not value:
         raise ValueError("ค่าวันที่ว่างเปล่า")
 
+    # ลองแปลงแบบ ISO 8601 ก่อน (รองรับ 2026-05-15T00:12:23.544407+07:00)
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        pass
+
     for fmt in DATE_FORMATS:
         try:
             return datetime.strptime(value, fmt).date()
@@ -30,7 +38,7 @@ def parse_date(value: str) -> datetime.date:
             continue
 
     raise ValueError(
-        f"ไม่สามารถแปลงวันที่ได้: '{value}'. รองรับรูปแบบ: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY"
+        f"ไม่สามารถแปลงวันที่ได้: '{value}'. รองรับรูปแบบ: ISO8601, YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY"
     )
 
 
@@ -122,14 +130,28 @@ def build_summary(rows: list[list[str]]) -> str:
     lines = [
         "สรุปยอดขายเมื่อวานน้า~ 🧸",
         f"วันที่: {yesterday}",
-        f"ยอดรวมทั้งหมด: {total_sales:.2f} บาท",
-        f"เมนูที่ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} ชิ้น)",
+        "---",
     ]
 
+    # แสดงรายละเอียดแยกตามเมนู
+    for menu in sorted(quantity_counter.keys()):
+        qty = quantity_counter[menu]
+        rev = menu_counter[menu]
+        lines.append(f"• {menu}: {qty} แก้ว ({rev:.2f} บาท)")
+
+    lines.append("---")
+    lines.append(f"💰 ยอดรวมทั้งหมด: {total_sales:.2f} บาท")
+    lines.append(f"🏆 ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} ชิ้น)")
+
+    if len(quantity_counter) > 1:
+        min_qty = min(quantity_counter.values())
+        least_menus = sorted([menu for menu, qty in quantity_counter.items() if qty == min_qty])
+        least_menu_str = ", ".join(least_menus)
+        lines.append(f"📉 ขายได้น้อยที่สุด: {least_menu_str} ({min_qty} ชิ้น)")
+
     if best_revenue_name != best_menu_name:
-        lines.append(
-            f"เมนูทำเงินมากสุด: {best_revenue_name} ({best_revenue_amount:.2f} บาท)"
-        )
+        lines.append(f"💎 ทำเงินมากสุด: {best_revenue_name} ({best_revenue_amount:.2f} บาท)")
+
 
     lines.append("ขอบคุณที่ดูแลร้านนะคะ 💕")
     return "\n".join(lines)

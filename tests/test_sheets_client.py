@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -31,24 +32,30 @@ class TestGetSheet:
         mock_client.open_by_key.assert_called_once_with(os.getenv("GOOGLE_SHEETS_ID"))
         assert result == mock_sheet
 
-    @patch.dict(os.environ, {"GOOGLE_SERVICE_ACCOUNT_FILE": "/path/to/service-account.json"})
     @patch("features.sheets_client.Credentials.from_service_account_file")
     @patch("features.sheets_client.gspread.authorize")
     @patch("features.sheets_client.gspread.service_account")
     def test_get_sheet_with_file_env_var(self, mock_gspread_auth, mock_authorize, mock_creds):
         """Test get_sheet using GOOGLE_SERVICE_ACCOUNT_FILE environment variable"""
-        # Setup mocks
-        mock_client = mock_authorize.return_value
-        mock_sheet = mock_client.open_by_key.return_value.sheet1
+        # Use platform-appropriate absolute path
+        if sys.platform == "win32":
+            abs_path = "C:\\path\\to\\service-account.json"
+        else:
+            abs_path = "/path/to/service-account.json"
 
-        # Call function
-        result = get_sheet()
+        with patch.dict(os.environ, {"GOOGLE_SERVICE_ACCOUNT_FILE": abs_path}):
+            # Setup mocks
+            mock_client = mock_authorize.return_value
+            mock_sheet = mock_client.open_by_key.return_value.sheet1
 
-        # Assertions
-        mock_creds.assert_called_once_with("/path/to/service-account.json", scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        mock_authorize.assert_called_once()
-        mock_client.open_by_key.assert_called_once_with(os.getenv("GOOGLE_SHEETS_ID"))
-        assert result == mock_sheet
+            # Call function
+            result = get_sheet()
+
+            # Assertions
+            mock_creds.assert_called_once_with(abs_path, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+            mock_authorize.assert_called_once()
+            mock_client.open_by_key.assert_called_once_with(os.getenv("GOOGLE_SHEETS_ID"))
+            assert result == mock_sheet
 
     def test_resolve_service_account_file_relative_to_project_root(self):
         """Test relative service account paths resolve from the repo root"""

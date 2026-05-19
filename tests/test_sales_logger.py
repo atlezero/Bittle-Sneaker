@@ -71,7 +71,10 @@ class TestMainFunction:
         # Setup mocks
         mock_parse_args.return_value = MagicMock(sale="กาแฟ:2:45")
         mock_parse_sale.return_value = ("กาแฟ", 2, 45.0)
-        mock_datetime.now.return_value.date.return_value.isoformat.return_value = "2024-01-01"
+        # Mock .now(THAI_TZ).isoformat()
+        mock_iso_timestamp = "2024-01-01T12:00:00.000000+07:00"
+        mock_datetime.now.return_value.isoformat.return_value = mock_iso_timestamp
+        
         mock_sheet = MagicMock()
         mock_get_sheet.return_value = mock_sheet
 
@@ -81,7 +84,7 @@ class TestMainFunction:
         # Assertions
         assert result == 0
         mock_datetime.now.assert_called_once_with(THAI_TZ)
-        mock_sheet.append_row.assert_called_once_with(["2024-01-01", "กาแฟ", 2, 45.0, 90.0])
+        mock_sheet.append_row.assert_called_once_with([mock_iso_timestamp, "กาแฟ", 2, 45.0, 90.0])
 
     @patch("features.sales_logger.load_dotenv")
     @patch("features.sales_logger.argparse.ArgumentParser.parse_args")
