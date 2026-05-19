@@ -22,7 +22,7 @@ MODEL = "gemini-3.1-flash-lite-preview"
 
 @st.cache_resource
 def load_rag():
-    return RAGEngine("knowledge/milklab_kb.txt")
+    return RAGEngine("knowledge/milkonthebeach_kb.txt")
 
 
 rag = load_rag()
@@ -94,8 +94,12 @@ if prompt:
 
 คำถาม: {prompt}
 """
-    response = client.models.generate_content(model=MODEL, contents=full_prompt)
-    answer = response.text
+    try:
+        response = client.models.generate_content(model=MODEL, contents=full_prompt)
+        answer = response.text
+    except Exception as e:
+        answer = "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะคะ 🙏"
+        write_trace("api_error", {"source": "web", "error": str(e)})
 
     # 📝 บันทึก trace: คำตอบจาก AI
     write_trace("rag_response", {"source": "web", "answer": answer})

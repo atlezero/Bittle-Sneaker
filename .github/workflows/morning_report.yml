@@ -2,7 +2,7 @@ name: Morning Report
 
 on:
   schedule:
-    - cron: '0 1 * * *'   # ตี 1 (UTC) = 8 โมงเช้า (ICT)
+    - cron: '30 22 * * *'   # 22:30 (UTC) = 05:30 น. (ICT) เผื่อเวลาดีเลย์ของ GitHub Actions (มักจะดีเลย์ 1-3 ชม.)
   workflow_dispatch:       # กดรันเองได้จาก GitHub UI
 
 jobs:

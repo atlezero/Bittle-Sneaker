@@ -7,3 +7,6 @@ gspread
 google-auth
 tzdata
 tenacity
+streamlit
+sentence-transformers
+faiss-cpu
