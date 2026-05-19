@@ -72,6 +72,7 @@ class TestBuildSummary:
         assert "กาแฟ: 3 แก้ว" in result
         assert "ชานม: 1 แก้ว" in result
         assert "ขายดีที่สุด: กาแฟ (3 ชิ้น)" in result
+        assert "ขายได้น้อยที่สุด: ชานม (1 ชิ้น)" in result
 
     @patch("features.morning_report.datetime")
     def test_build_summary_no_sales(self, mock_datetime):

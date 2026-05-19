@@ -143,6 +143,12 @@ def build_summary(rows: list[list[str]]) -> str:
     lines.append(f"💰 ยอดรวมทั้งหมด: {total_sales:.2f} บาท")
     lines.append(f"🏆 ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} ชิ้น)")
 
+    if len(quantity_counter) > 1:
+        min_qty = min(quantity_counter.values())
+        least_menus = sorted([menu for menu, qty in quantity_counter.items() if qty == min_qty])
+        least_menu_str = ", ".join(least_menus)
+        lines.append(f"📉 ขายได้น้อยที่สุด: {least_menu_str} ({min_qty} ชิ้น)")
+
     if best_revenue_name != best_menu_name:
         lines.append(f"💎 ทำเงินมากสุด: {best_revenue_name} ({best_revenue_amount:.2f} บาท)")
 

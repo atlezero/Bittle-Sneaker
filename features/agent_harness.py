@@ -145,6 +145,12 @@ def format_sales_today(result: dict) -> str:
     if best_qty_menu:
         lines.append(f"🏆 **ขายดีที่สุด:** {best_qty_menu} ({summary[best_qty_menu]['quantity']} แก้ว)")
 
+    if len(summary) > 1:
+        min_qty = min(data["quantity"] for data in summary.values())
+        least_qty_menus = sorted([m for m, data in summary.items() if data["quantity"] == min_qty])
+        least_menu_str = ", ".join(least_qty_menus)
+        lines.append(f"📉 **ขายได้น้อยที่สุด:** {least_menu_str} ({min_qty} แก้ว)")
+
     return "\n".join(lines)
 
 

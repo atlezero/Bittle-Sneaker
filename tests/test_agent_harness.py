@@ -122,3 +122,43 @@ def test_run_agent_get_sales(mock_tools, mock_generate):
 
     assert "500" in result
     assert "10" in result
+
+
+@patch("features.agent_harness.client.models.generate_content")
+@patch("features.agent_harness.TOOLS")
+def test_run_agent_get_sales_multiple_items(mock_tools, mock_generate):
+    mock_response = Mock()
+    mock_response.text = """
+    {
+        "action": "get_sales_today",
+        "args": {}
+    }
+    """
+    mock_generate.return_value = mock_response
+    mock_tools.__contains__.return_value = True
+
+    mock_tools.__getitem__.return_value = Mock(
+        return_value={
+            "total_revenue": 700,
+            "total_items": 14,
+            "menu_summary": {
+                "ชาไทย": {
+                    "quantity": 10,
+                    "total": 500
+                },
+                "โกโก้": {
+                    "quantity": 4,
+                    "total": 200
+                }
+            }
+        }
+    )
+
+    result = run_agent("สรุปยอดขายวันนี้")
+
+    assert "700" in result
+    assert "14" in result
+    assert "ขายดีที่สุด" in result
+    assert "ชาไทย" in result
+    assert "ขายได้น้อยที่สุด" in result
+    assert "โกโก้" in result
