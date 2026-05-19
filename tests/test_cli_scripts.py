@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -12,8 +13,10 @@ def isolated_env() -> dict[str, str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": "",
+        "PYTHONUTF8": "1",
+        "PYTHONIOENCODING": "utf-8",
         "GOOGLE_SHEETS_ID": "test-sheet-id",
-        "GOOGLE_SERVICE_ACCOUNT_FILE": "/tmp/milk-on-the-beach-missing-service-account.json",
+        "GOOGLE_SERVICE_ACCOUNT_FILE": str(Path(tempfile.gettempdir()) / "milk-on-the-beach-missing-service-account.json"),
         "TELEGRAM_BOT_TOKEN": "fake-token",
         "TELEGRAM_CHAT_ID": "fake-chat-id",
     }
@@ -29,6 +32,7 @@ def run_from_features(*args: str) -> subprocess.CompletedProcess[str]:
         cwd=FEATURES_DIR,
         env=isolated_env(),
         text=True,
+        encoding="utf-8",
         capture_output=True,
         timeout=15,
         check=False,
