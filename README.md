@@ -1,3 +1,15 @@
+---
+title: Milk On The Beach
+emoji: 🧋
+colorFrom: orange
+colorTo: yellow
+sdk: streamlit
+sdk_version: "1.57.0"
+python_version: "3.11"
+app_file: app.py
+pinned: false
+---
+
 # milk-on-the-beach
 
 เครื่องมือเล็ก ๆ สำหรับบันทึกยอดขายลง Google Sheets, สรุปรายงานยอดขาย, ส่งรายงานไป Telegram และสร้าง caption สินค้าด้วย Gemini
