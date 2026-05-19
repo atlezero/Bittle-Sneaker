@@ -1,8 +1,8 @@
 ---
 title: Milk On The Beach
 emoji: 🧋
-colorFrom: orange
-colorTo: yellow
+colorFrom: yellow
+colorTo: red
 sdk: streamlit
 sdk_version: "1.57.0"
 python_version: "3.11"
