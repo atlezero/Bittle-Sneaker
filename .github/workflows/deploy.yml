@@ -1,0 +1,24 @@
+# .github/workflows/deploy.yml
+name: Deploy to HF Space
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.email "deploy@github.com"
+          git config user.name "GitHub Actions"
+          git remote add hf https://atlez:$HF_TOKEN@huggingface.co/spaces/atlez/milk-on-the-beach
+          git push hf main --force
