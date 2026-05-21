@@ -31,14 +31,15 @@ class RAGEngine:
             )
 
         text = path.read_text(encoding="utf-8")
-        self._chunks: list[str] = self._split_chunks(text, chunk_size)
+        self._base_chunks: list[str] = self._split_chunks(text, chunk_size)
 
-        if not self._chunks:
+        if not self._base_chunks:
             raise ValueError(
                 f"ไฟล์ {knowledge_path} ว่างเปล่า ไม่มีข้อมูลให้ค้นหา"
             )
 
-        # Pre-compute TF-IDF vectors for all chunks
+        # Pre-compute TF-IDF vectors for all chunks initially
+        self._chunks = self._base_chunks
         self._tf_idf_matrix = self._build_tfidf(self._chunks)
 
     # ──────────────────────────────────────────────
@@ -47,11 +48,73 @@ class RAGEngine:
 
     def search(self, query: str, top_k: int = 3) -> list[str]:
         """
-        ค้นหา chunk ที่เกี่ยวข้องกับ query มากที่สุด
-
-        Returns:
-            list ของ chunk strings เรียงจากคะแนนสูงสุด
+        ค้นหา chunk ที่เกี่ยวข้องกับ query มากที่สุด โดยดึงข้อมูลรองเท้าที่เป็นปัจจุบันจาก Google Sheet (Products) มาเสริมแบบเรียลไทม์
         """
+        # เริ่มจากข้อมูลพื้นฐานในไฟล์ knowledge base
+        dynamic_chunks = list(self._base_chunks)
+
+        # โหลดข้อมูลสินค้าในสต็อกจริงแบบเรียลไทม์จาก Google Sheets (Products)
+        try:
+            from features.sheets_client import get_sheet
+            sheet = get_sheet("Products")
+            records = sheet.get_all_records()
+            for p in records:
+                # เอาเฉพาะรายการที่ยังไม่ได้ขาย
+                status = str(p.get("สถานะ", "")).strip()
+                if status == "ขายแล้ว":
+                    continue
+
+                sku = str(p.get("รหัสสินค้า", "")).strip()
+                brand = str(p.get("แบรนด์", "")).strip()
+                model = str(p.get("รุ่น", "")).strip()
+                color = str(p.get("สี", "")).strip()
+                size_us = str(p.get("ไซส์ US", "")).strip()
+                size_eu = str(p.get("ไซส์ EU", "")).strip()
+                condition = str(p.get("สภาพ", "")).strip()
+                details = str(p.get("รายละเอียดสภาพ", "")).strip()
+                price = str(p.get("ราคาขาย", "")).strip()
+                has_box = str(p.get("มีกล่อง", "")).strip()
+                has_receipt = str(p.get("มีใบเสร็จ", "")).strip()
+                notes = str(p.get("หมายเหตุ", "")).strip()
+
+                parts = []
+                parts.append(f"รองเท้า {brand} {model}")
+                if sku and sku != "ไม่ระบุ":
+                    parts.append(f"รหัสสินค้า {sku}")
+                if color and color != "ไม่ระบุ":
+                    parts.append(f"สี {color}")
+
+                sizes = []
+                if size_us and size_us != "ไม่ระบุ" and size_us != "ทั่วไป":
+                    sizes.append(f"ไซส์ US {size_us}")
+                if size_eu and size_eu != "ไม่ระบุ" and size_eu != "ทั่วไป":
+                    sizes.append(f"ไซส์ EU {size_eu}")
+                if sizes:
+                    parts.append(" / ".join(sizes))
+
+                if condition and condition != "ไม่ระบุ":
+                    parts.append(f"สภาพ {condition}")
+                if details and details != "ไม่ระบุ":
+                    parts.append(f"รายละเอียดสภาพ: {details}")
+                if has_box and has_box != "ไม่ระบุ":
+                    parts.append(f"กล่อง: {has_box}")
+                if has_receipt and has_receipt != "ไม่ระบุ":
+                    parts.append(f"ใบเสร็จ: {has_receipt}")
+                if price:
+                    parts.append(f"ราคา {price} บาท")
+                if notes:
+                    parts.append(f"หมายเหตุ: {notes}")
+
+                desc = " - ".join(parts)
+                dynamic_chunks.append(desc)
+        except Exception:
+            pass
+
+        self._chunks = dynamic_chunks
+
+        # คำนวณ TF-IDF matrix ใหม่สำหรับ dynamic chunks
+        self._tf_idf_matrix = self._build_tfidf(self._chunks)
+
         query_vec = self._tfidf_vector(self._tokenize(query), self._idf)
         scores = [
             self._cosine(query_vec, chunk_vec)

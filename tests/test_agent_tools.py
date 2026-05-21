@@ -17,22 +17,9 @@ from features.agent_tools import (
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
-def get_test_sheet():
-
-    creds = Credentials.from_service_account_file(
-        "service-account.json",
-        scopes=SCOPES,
-    )
-
-    gc = gspread.authorize(creds)
-
-    spreadsheet_id = os.getenv("GOOGLE_SHEETS_ID")
-
-    spreadsheet = gc.open_by_key(
-        spreadsheet_id
-    )
-
-    return spreadsheet.worksheet("test")
+def get_test_sheet(name=None):
+    from features.sheets_client import get_sheet
+    return get_sheet("test")
 
 
 # Check if credentials exist for integration tests
@@ -60,16 +47,16 @@ def setup_integration(monkeypatch):
 def test_log_sale_success():
 
     result = log_sale(
-        menu="ชาไทย",
+        menu="Nike",
         quantity=2,
-        price=50,
+        price=150,
     )
 
     assert result["status"] == "success"
-    assert result["menu"] == "ชาไทย"
+    assert result["menu"] == "Nike"
     assert result["quantity"] == 2
-    assert result["price"] == 50
-    assert result["total"] == 100
+    assert result["price"] == 150
+    assert result["total"] == 300
 
 
 @pytest.mark.integration
@@ -78,9 +65,9 @@ def test_log_sale_invalid_quantity():
 
     with pytest.raises(ValueError):
         log_sale(
-            menu="โกโก้",
+            menu="Adidas",
             quantity=0,
-            price=45,
+            price=290,
         )
 
 
@@ -90,7 +77,7 @@ def test_log_sale_invalid_price():
 
     with pytest.raises(ValueError):
         log_sale(
-            menu="โกโก้",
+            menu="Adidas",
             quantity=1,
             price=0,
         )

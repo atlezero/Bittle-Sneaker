@@ -71,8 +71,8 @@ def generate_captions(product_name: str, price: int) -> str:
 if __name__ == "__main__":
 
     result = generate_captions(
-        product_name="เสื้อยืด oversize สีดำ",
-        price=299,
+        product_name="Nike Air Force One สีขาว มือสอง ไซส์42 สภาพ95% ไม่มีกล่อง",
+        price=1290,
     )
 
     print(result)

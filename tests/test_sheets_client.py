@@ -146,4 +146,5 @@ def test_append_and_read_from_test_worksheet():
     sheet.append_row(row)
 
     values = sheet.get_all_values()
-    assert row in values
+    # ตรวจสอบโดยชิ้นเฉพาะ 5 คอลัมน์แรกเพื่อความทนทานต่อจำนวนคอลัมน์ของชีท
+    assert row in [v[:5] for v in values]

@@ -17,9 +17,9 @@ def test_run_agent_log_sale(mock_tools, mock_generate):
     {
         "action": "log_sale",
         "args": {
-            "menu": "ชาไทย",
+            "menu": "Nike",
             "quantity": 2,
-            "price": 50
+            "price": 150
         }
     }
     """
@@ -31,16 +31,16 @@ def test_run_agent_log_sale(mock_tools, mock_generate):
 
     mock_tools.__getitem__.return_value = Mock(
         return_value={
-            "menu": "ชาไทย",
+            "menu": "Nike",
             "quantity": 2,
-            "total": 100,
+            "total": 300,
         }
     )
 
-    result = run_agent("ขายชาไทย 2 แก้ว")
+    result = run_agent("ขาย Nike 2 คู่")
 
     assert "บันทึกสำเร็จ" in result
-    assert "100" in result
+    assert "300" in result
 
 
 # ─────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ def test_run_agent_invalid_json(mock_generate):
 
     mock_generate.return_value = mock_response
 
-    result = run_agent("ขายชาไทย")
+    result = run_agent("ขาย Nike")
 
     assert "AI ตอบกลับในรูปแบบที่ไม่ถูกต้อง" in result
 
@@ -110,7 +110,7 @@ def test_run_agent_get_sales(mock_tools, mock_generate):
             "total_revenue": 500,
             "total_items": 10,
             "menu_summary": {
-                "ชาไทย": {
+                "Nike": {
                     "quantity": 10,
                     "total": 500
                 }
@@ -142,11 +142,11 @@ def test_run_agent_get_sales_multiple_items(mock_tools, mock_generate):
             "total_revenue": 700,
             "total_items": 14,
             "menu_summary": {
-                "ชาไทย": {
+                "Nike": {
                     "quantity": 10,
                     "total": 500
                 },
-                "โกโก้": {
+                "Adidas": {
                     "quantity": 4,
                     "total": 200
                 }
@@ -159,6 +159,6 @@ def test_run_agent_get_sales_multiple_items(mock_tools, mock_generate):
     assert "700" in result
     assert "14" in result
     assert "ขายดีที่สุด" in result
-    assert "ชาไทย" in result
+    assert "Nike" in result
     assert "ขายได้น้อยที่สุด" in result
-    assert "โกโก้" in result
+    assert "Adidas" in result
