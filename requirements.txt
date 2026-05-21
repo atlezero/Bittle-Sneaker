@@ -11,3 +11,4 @@ streamlit
 Pillow
 sentence-transformers
 faiss-cpu
+google-cloud-firestore
