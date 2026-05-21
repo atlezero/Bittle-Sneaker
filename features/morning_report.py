@@ -58,15 +58,34 @@ def build_summary(rows: list[list[str]]) -> str:
     data_rows = rows[1:]
 
     date_col = find_column(headers, ["date", "วันที่", "day"])
-    menu_col = find_column(headers, ["menu", "เมนู", "item"])
+    brand_col = find_column(headers, ["แบรนด์", "brand"])
+    model_col = find_column(headers, ["sneaker", "รองเท้า", "รุ่น", "game", "ชื่อเกม"])
+    sku_col = find_column(headers, ["รหัสสินค้า", "sku"])
+    size_col = find_column(headers, ["size", "ไซส์", "grade", "เกรดไอดี"])
+    
+    # Fallback to menu column if model_col is not found
+    menu_col = model_col if model_col is not None else find_column(headers, ["menu", "เมนู", "item"])
+    
     quantity_col = find_column(headers, ["quantity", "จำนวน", "qty"])
-    total_col = find_column(headers, ["total", "ยอดรวม", "amount"])
+    total_col = find_column(headers, ["total", "ยอดรวม", "amount", "ราคาที่ขาย"])
 
-    if date_col is None or menu_col is None or (quantity_col is None and total_col is None):
+    if date_col is None or (menu_col is None and brand_col is None and sku_col is None):
         return (
             "ไม่พบคอลัมน์ที่ต้องการใน Google Sheet ค่ะ 🫣\n"
-            "กรุณาตรวจสอบว่ามีคอลัมน์ วันที่, เมนู, จำนวน หรือ ยอดรวม อยู่ในสเปรดชีต"
+            "กรุณาตรวจสอบว่ามีคอลัมน์ วันที่, เมนู (หรือ ชื่อเกม), จำนวน หรือ ยอดรวม อยู่ในสเปรดชีต"
         )
+
+    # ดึงข้อมูลสินค้าจากชีท Products มาใช้จอยน์ตามรหัสสินค้า (SKU)
+    sku_to_product = {}
+    try:
+        product_sheet = get_sheet("Products")
+        product_rows = product_sheet.get_all_records()
+        for p in product_rows:
+            p_sku = str(p.get("รหัสสินค้า", "")).strip()
+            if p_sku:
+                sku_to_product[p_sku] = p
+    except Exception:
+        pass
 
     yesterday = datetime.now(THAI_TZ).date() - timedelta(days=1)
     filtered = []
@@ -82,16 +101,53 @@ def build_summary(rows: list[list[str]]) -> str:
         if row_date != yesterday:
             continue
 
-        menu = row[menu_col].strip() if len(row) > menu_col else ""
+        sku = row[sku_col].strip() if sku_col is not None and len(row) > sku_col else ""
+        brand = ""
+        model = ""
+        size = ""
+
+        if sku and sku in sku_to_product:
+            p_info = sku_to_product[sku]
+            brand = str(p_info.get("แบรนด์", "")).strip()
+            model = str(p_info.get("รุ่น", "")).strip()
+            size = str(p_info.get("ไซส์ EU") or p_info.get("ไซส์ US") or "").strip()
+            if size == "ไม่ระบุ":
+                size = ""
+
+        # Fallback หากไม่มีข้อมูลใน Products ให้ใช้คอลัมน์เดิมในแถว
+        if not brand and brand_col is not None and len(row) > brand_col:
+            brand = row[brand_col].strip()
+        if not model and model_col is not None and len(row) > model_col:
+            model = row[model_col].strip()
+        if not size and size_col is not None and len(row) > size_col:
+            size = row[size_col].strip()
+
+        menu_parts = []
+        if sku and sku != "ไม่ระบุ":
+            menu_parts.append(f"[{sku}]")
+        if brand and brand != "ไม่ระบุ":
+            menu_parts.append(brand)
+        if model and model != "ไม่ระบุ":
+            menu_parts.append(model)
+
+        if menu_parts:
+            menu = " ".join(menu_parts)
+        else:
+            menu = row[menu_col].strip() if menu_col is not None and len(row) > menu_col else ""
+
         if not menu:
             continue
 
-        quantity = 0
+        # หากมีไซส์ ให้รวมเข้ากับชื่อรองเท้าเพื่อแสดงผลสรุปที่สวยงาม
+        if size and size != "ทั่วไป" and size != "ไม่ระบุ":
+            menu = f"{menu} ({size})"
+
+        quantity = 1
         if quantity_col is not None and len(row) > quantity_col:
             try:
                 quantity = int(float(row[quantity_col]))
             except ValueError:
-                quantity = 0
+                quantity = 1
 
         total = 0.0
         if total_col is not None and len(row) > total_col:
@@ -111,6 +167,7 @@ def build_summary(rows: list[list[str]]) -> str:
 
         filtered.append((menu, quantity, total))
 
+
     if not filtered:
         return f"เมื่อวาน ({yesterday}) ยังไม่มียอดขายเลยค่ะ 🥲"
 
@@ -128,7 +185,7 @@ def build_summary(rows: list[list[str]]) -> str:
     best_revenue_name, best_revenue_amount = best_revenue_menu
 
     lines = [
-        "สรุปยอดขายเมื่อวานน้า~ 🧸",
+        "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨",
         f"วันที่: {yesterday}",
         "---",
     ]
@@ -137,17 +194,17 @@ def build_summary(rows: list[list[str]]) -> str:
     for menu in sorted(quantity_counter.keys()):
         qty = quantity_counter[menu]
         rev = menu_counter[menu]
-        lines.append(f"• {menu}: {qty} แก้ว ({rev:.2f} บาท)")
+        lines.append(f"• {menu}: {qty} คู่ ({rev:.2f} บาท)")
 
     lines.append("---")
     lines.append(f"💰 ยอดรวมทั้งหมด: {total_sales:.2f} บาท")
-    lines.append(f"🏆 ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} ชิ้น)")
+    lines.append(f"🏆 ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} คู่)")
 
     if len(quantity_counter) > 1:
         min_qty = min(quantity_counter.values())
         least_menus = sorted([menu for menu, qty in quantity_counter.items() if qty == min_qty])
         least_menu_str = ", ".join(least_menus)
-        lines.append(f"📉 ขายได้น้อยที่สุด: {least_menu_str} ({min_qty} ชิ้น)")
+        lines.append(f"📉 ขายได้น้อยที่สุด: {least_menu_str} ({min_qty} คู่)")
 
     if best_revenue_name != best_menu_name:
         lines.append(f"💎 ทำเงินมากสุด: {best_revenue_name} ({best_revenue_amount:.2f} บาท)")
@@ -180,8 +237,17 @@ def main() -> int:
     load_dotenv()
 
     try:
-        sheet = get_sheet()
+        sheet = get_sheet("Orders")
         rows = sheet.get_all_values()
+        
+        # หากได้ผลลัพธ์เป็นแฮดเดอร์เปล่า หรือ Orders ไม่มีข้อมูล ให้ลองดึงจาก Products เผื่อเป็นโครงสร้างแบบ Legacy หรือยังไม่มี Orders
+        if len(rows) <= 1:
+            try:
+                sheet = get_sheet("Products")
+                rows = sheet.get_all_values()
+            except Exception:
+                pass
+
         summary = build_summary(rows)
 
         if "ไม่พบคอลัมน์" in summary or "ยังไม่มีข้อมูล" in summary:

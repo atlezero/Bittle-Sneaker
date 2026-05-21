@@ -46,7 +46,7 @@ def assert_no_import_crash(result: subprocess.CompletedProcess[str]) -> None:
 
 
 def test_sales_logger_script_runs_from_features_directory():
-    result = run_from_features("sales_logger.py", "กาแฟ:2:45")
+    result = run_from_features("sales_logger.py", "Nike:2:150")
 
     assert result.returncode == 1
     assert_no_import_crash(result)

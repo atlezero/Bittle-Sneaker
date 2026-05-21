@@ -37,22 +37,47 @@ THAI_TZ = ZoneInfo("Asia/Bangkok")
 # ─────────────────────────────────────────────────────────────
 
 SYSTEM_INSTRUCTION = """
-คุณคือ Milky ผู้ช่วย AI ของร้าน Milk on the Beach
+คุณคือ Sandy ผู้ช่วย AI ของร้าน Bittle Sneaker
 หน้าที่ของคุณคือแปลงคำสั่งภาษาไทยเป็น JSON action
 
 ตอบกลับเป็น JSON เท่านั้น
 
-รูปแบบ:
+รูปแบบ JSON action ที่รองรับ:
 
-{"action": "log_sale", "args": {"menu": "...", "quantity": N, "price": N}}
+1. บันทึกยอดขาย (log_sale):
+   อาร์กิวเมนต์ที่ต้องระบุใน args (ให้พยายามดึงข้อมูลจากข้อความของลูกค้า):
+   - sku: รหัสสินค้า (ถ้าระบุในข้อความ เช่น NK-001, AD-02, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - brand: แบรนด์รองเท้า (เช่น Nike, Adidas, Converse, หากไม่ระบุให้ใส่ "ไม่ระบุ")
+   - model: รุ่นรองเท้า (เช่น Dunk Low, Air Max, Yeezy 350, Chuck Taylor, หากไม่ระบุให้ใส่ "ไม่ระบุ")
+   - size: ไซส์รองเท้า (เช่น 42, 43, 9US, หากไม่ระบุให้ใส่ "ทั่วไป")
+   - quantity: จำนวนคู่ที่ขายได้ (Integer, ค่าเริ่มต้นคือ 1)
+   - price: ราคาขายต่อหน่วยเป็นบาท (Float)
+   - color: สีของรองเท้า (หากมีระบุในข้อความ เช่น "สีแดง", "ขาว-เทา", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - condition: สภาพรองเท้า (หากมีระบุในข้อความ เช่น "95%", "90%", "สภาพดี", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - condition_details: รายละเอียดสภาพรองเท้า (หากมีระบุรายละเอียดเพิ่มเติม, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - cost_price: ราคาทุนของรองเท้า (Float, หากไม่มีระบุให้ใส่ 0.0)
+   - year: ปีที่ผลิต (หากมีระบุ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - has_box: มีกล่องหรือไม่ (ระบุเป็น "มีกล่อง" หรือ "ไม่ระบุ")
+   - has_receipt: มีใบเสร็จหรือไม่ (ระบุเป็น "มีใบเสร็จ" หรือ "ไม่ระบุ")
+   - source_id: รหัสแหล่งที่มา (หากมีระบุ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   
+   - customer_name: ชื่อลูกค้า (หากมีระบุในข้อความ เช่น "คุณจอย", "สมชาย", หากไม่มีระบุให้ใส่ "ลูกค้าทั่วไป")
+   - customer_ig: IG ของลูกค้า (หากมีระบุในข้อความ เช่น "@joy_street", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - customer_line: Line ID ของลูกค้า (หากมีระบุในข้อความ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - customer_phone: เบอร์โทรของลูกค้า (หากมีระบุในข้อความ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   
+   - sales_channel: ช่องทางขาย (หากมีระบุในข้อความ เช่น "IG", "Line", "Facebook", "หน้าร้าน", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - payment_method: วิธีชำระเงิน (หากมีระบุในข้อความ เช่น "โอนเงิน", "บัตรเครดิต", "เงินสด", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - payment_status: สถานะชำระเงิน (หากมีระบุ เช่น "ชำระแล้ว", "รอตรวจสอบ", หากไม่มีระบุให้ใส่ "ชำระแล้ว")
 
-ถ้าต้องการสรุปยอดขายวันนี้:
+   ตัวอย่าง:
+   {"action": "log_sale", "args": {"sku": "NK-001", "brand": "Nike", "model": "Dunk Low", "size": "42", "quantity": 1, "price": 3500.0, "customer_name": "คุณจอย", "sales_channel": "IG", "payment_method": "โอนเงิน"}}
 
-{"action": "get_sales_today", "args": {}}
+2. สรุปยอดขายวันนี้ (get_sales_today):
+   {"action": "get_sales_today", "args": {}}
 
-ถ้าคำสั่งไม่เกี่ยวข้อง:
-
-{"action": "unknown", "args": {}}
+3. คำสั่งอื่นๆ ที่ไม่เกี่ยวข้องหรือไม่เข้าใจ:
+   {"action": "unknown", "args": {}}
 """
 
 
@@ -134,22 +159,22 @@ def format_sales_today(result: dict) -> str:
 
     # รายละเอียดแต่ละเมนู
     for menu, data in summary.items():
-        lines.append(f"• {menu}: {data['quantity']} แก้ว (รวม {data['total']:.2f} บาท)")
+        lines.append(f"• {menu}: {data['quantity']} คู่ (รวม {data['total']:.2f} บาท)")
 
     lines.append("---")
     lines.append(f"💰 **ยอดรวมทั้งหมด:** {total:.2f} บาท")
-    lines.append(f"🥤 **จำนวนรวม:** {count} แก้ว")
+    lines.append(f"👟 **จำนวนรวม:** {count} คู่")
 
     # หาเมนูขายดี (ตามจำนวน)
     best_qty_menu = max(summary, key=lambda m: summary[m]["quantity"], default=None)
     if best_qty_menu:
-        lines.append(f"🏆 **ขายดีที่สุด:** {best_qty_menu} ({summary[best_qty_menu]['quantity']} แก้ว)")
+        lines.append(f"🏆 **ขายดีที่สุด:** {best_qty_menu} ({summary[best_qty_menu]['quantity']} คู่)")
 
     if len(summary) > 1:
         min_qty = min(data["quantity"] for data in summary.values())
         least_qty_menus = sorted([m for m, data in summary.items() if data["quantity"] == min_qty])
         least_menu_str = ", ".join(least_qty_menus)
-        lines.append(f"📉 **ขายได้น้อยที่สุด:** {least_menu_str} ({min_qty} แก้ว)")
+        lines.append(f"📉 **ขายได้น้อยที่สุด:** {least_menu_str} ({min_qty} คู่)")
 
     return "\n".join(lines)
 
@@ -236,7 +261,7 @@ def run_agent(
             if action == "log_sale":
                 results_text.append(
                     f"✅ บันทึกสำเร็จ: {result['menu']} "
-                    f"{result['quantity']} แก้ว (รวม {result['total']} บาท)"
+                    f"{result['quantity']} คู่ (รวม {result['total']} บาท)"
                 )
             elif action == "get_sales_today":
                 results_text.append(format_sales_today(result))
@@ -257,7 +282,7 @@ def run_agent(
 if __name__ == "__main__":
 
     print(
-        "Milky Agent พร้อมรับคำสั่ง "
+        "Sandy Agent พร้อมรับคำสั่ง "
         "(พิมพ์ 'exit' เพื่อออก)\n"
     )
 
@@ -272,4 +297,4 @@ if __name__ == "__main__":
 
         result = run_agent(user_input)
 
-        print(f"Milky: {result}\n")
+        print(f"Sandy: {result}\n")

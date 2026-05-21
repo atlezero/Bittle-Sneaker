@@ -1,8 +1,8 @@
 ---
-title: Milk On The Beach
-emoji: 🧋
-colorFrom: yellow
-colorTo: red
+title: Bittle Sneaker
+emoji: 👟
+colorFrom: indigo
+colorTo: blue
 sdk: streamlit
 sdk_version: "1.57.0"
 python_version: "3.11"
@@ -10,10 +10,10 @@ app_file: app.py
 pinned: false
 ---
 
-# 🧋 Milk On The Beach — AI Chatbot สำหรับร้านเครื่องดื่ม
+# 👟 Bittle Sneaker — AI Chatbot สำหรับร้านขายรองเท้ามือสอง
 
-ระบบ AI Chatbot ผู้ช่วยร้านเครื่องดื่ม **Milk On The Beach** พัฒนาด้วย Streamlit + Gemini API + RAG  
-ช่วยให้ลูกค้าถามข้อมูลร้าน เมนู ราคา โปรโมชัน และบริการต่าง ๆ ได้ทันทีผ่านหน้าเว็บ
+ระบบ AI Chatbot ผู้ช่วยของร้านขายรองเท้ามือสอง **Bittle Sneaker** พัฒนาด้วย Streamlit + Gemini API + RAG  
+ช่วยให้ลูกค้าเช็คข้อมูลรองเท้ามือสองยี่ห้อดัง สภาพรองเท้า ราคา ไซส์ นโยบายรับประกันของแท้ และช่องทางติดต่อของร้านค้าได้ทันทีตลอด 24 ชั่วโมง
 
 > 📖 อ่าน thinking process ของโปรเจกต์ได้ที่ [PIVOT.md](PIVOT.md)
 
@@ -25,10 +25,10 @@ pinned: false
 
 | ฟีเจอร์ | รายละเอียด |
 |---|---|
-| 🧋 **Milky Bot** | Chatbot ตอบคำถามลูกค้าจากข้อมูลร้านด้วย RAG + Gemini |
-| 📊 **บันทึกยอดขาย** | บันทึกยอดขายลง Google Sheets ผ่าน CLI |
-| 📈 **สรุปรายงาน** | สรุปยอดขายเมื่อวานส่ง Telegram อัตโนมัติทุกเช้า |
-| 🕐 **คำสั่งลัด** | ปุ่ม shortcut ถามคำถามยอดฮิตได้ทันที |
+| 👟 **Sandy Bot** | Chatbot ตอบคำถามลูกค้าจากข้อมูลรองเท้ามือสองและร้านค้าด้วย RAG + Gemini |
+| 📊 **บันทึกยอดขาย** | บันทึกยอดขายรองเท้าลง Google Sheets ผ่าน CLI |
+| 📈 **สรุปรายงาน** | สรุปยอดขายรองเท้าเมื่อวานส่ง Telegram อัตโนมัติทุกเช้า |
+| 🕐 **คำสั่งลัด** | ปุ่ม shortcut ถามคำถามยอดฮิตเกี่ยวกับรองเท้าและร้านค้าได้ทันที |
 | 📝 **Trace Log** | บันทึกทุกการสนทนาลง `agent_trace.log` |
 
 ## 🏗️ โครงสร้างโปรเจกต์
@@ -37,15 +37,16 @@ pinned: false
 .
 ├── app.py                      # Streamlit chatbot UI
 ├── features/
+├── features/
 │   ├── agent_harness.py        # Agent orchestrator + Gemini
 │   ├── agent_tools.py          # Tools: log_sale, get_sales_today
 │   ├── rag_engine.py           # RAG engine (TF-IDF based)
-│   ├── morning_report.py       # สรุปยอดขาย → Telegram
-│   ├── sales_logger.py         # CLI บันทึกยอดขาย
+│   ├── morning_report.py       # สรุปยอดขายรองเท้า → Telegram
+│   ├── sales_logger.py         # CLI บันทึกยอดขายรองเท้ามือสอง
 │   ├── sheets_client.py        # Google Sheets client
-│   └── caption_gen.py          # สร้าง caption ด้วย Gemini
+│   └── caption_gen.py          # สร้าง caption โปรโมตรองเท้าด้วย Gemini
 ├── knowledge/
-│   └── milkonthebeach_kb.txt   # Knowledge base ของร้าน
+│   └── sneaker_shop_kb.txt     # Knowledge base รายการรองเท้าและสภาพร้าน
 ├── tests/                      # Unit tests
 ├── .github/workflows/
 │   ├── deploy.yml              # Auto deploy → HF Spaces
@@ -121,9 +122,6 @@ pytest
 - `service-account.json` — Google credentials
 - `.venv/` — Virtual environment
 - `agent_trace.log` — Trace logs
-
-
-
 
 ## Demo Day Self-Check
 
