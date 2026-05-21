@@ -38,6 +38,21 @@ def get_sheet(worksheet_name: str | None = None):
     sheet_id = os.getenv("GOOGLE_SHEETS_ID")
     spreadsheet = client.open_by_key(sheet_id)
     worksheet_name = worksheet_name or os.getenv("GOOGLE_SHEETS_WORKSHEET")
+    prefix = os.getenv("WORKSHEET_PREFIX", "")
+    
     if worksheet_name:
-        return spreadsheet.worksheet(worksheet_name)
+        prefixed_name = f"{prefix}{worksheet_name}"
+        try:
+            return spreadsheet.worksheet(prefixed_name)
+        except gspread.exceptions.WorksheetNotFound:
+            return spreadsheet.add_worksheet(title=prefixed_name, rows=100, cols=20)
+            
+    if prefix:
+        prefixed_name = f"{prefix}Products"
+        try:
+            return spreadsheet.worksheet(prefixed_name)
+        except gspread.exceptions.WorksheetNotFound:
+            return spreadsheet.add_worksheet(title=prefixed_name, rows=100, cols=20)
+
     return spreadsheet.sheet1
+

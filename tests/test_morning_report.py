@@ -59,20 +59,20 @@ class TestBuildSummary:
 
         rows = [
             ["วันที่", "เมนู", "จำนวน", "ราคา", "ยอดรวม"],
-            ["2024-01-13T10:00:00+07:00", "กาแฟ", "2", "45", "90"],
-            ["2024-01-13T11:00:00+07:00", "ชานม", "1", "50", "50"],
-            ["2024-01-13T12:00:00+07:00", "กาแฟ", "1", "45", "45"],
+            ["2024-01-13T10:00:00+07:00", "Nike", "2", "150", "300"],
+            ["2024-01-13T11:00:00+07:00", "Adidas", "1", "290", "290"],
+            ["2024-01-13T12:00:00+07:00", "Nike", "1", "150", "150"],
         ]
 
         result = build_summary(rows)
 
         mock_datetime.now.assert_called_once_with(THAI_TZ)
-        assert "สรุปยอดขายเมื่อวานน้า~ 🧸" in result
-        assert "ยอดรวมทั้งหมด: 185.00 บาท" in result
-        assert "กาแฟ: 3 แก้ว" in result
-        assert "ชานม: 1 แก้ว" in result
-        assert "ขายดีที่สุด: กาแฟ (3 ชิ้น)" in result
-        assert "ขายได้น้อยที่สุด: ชานม (1 ชิ้น)" in result
+        assert "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨" in result
+        assert "ยอดรวมทั้งหมด: 740.00 บาท" in result
+        assert "Nike: 3 คู่" in result
+        assert "Adidas: 1 คู่" in result
+        assert "ขายดีที่สุด: Nike (3 คู่)" in result
+        assert "ขายได้น้อยที่สุด: Adidas (1 คู่)" in result
 
     @patch("features.morning_report.datetime")
     def test_build_summary_no_sales(self, mock_datetime):
@@ -83,7 +83,7 @@ class TestBuildSummary:
 
         rows = [
             ["วันที่", "เมนู", "จำนวน", "ราคา", "ยอดรวม"],
-            ["2024-01-10", "กาแฟ", "2", "45", "90"],
+            ["2024-01-10", "Nike", "2", "150", "300"],
         ]
 
         result = build_summary(rows)
@@ -99,12 +99,38 @@ class TestBuildSummary:
     def test_build_summary_missing_columns(self):
         rows = [
             ["ชื่อ", "ราคา"],
-            ["กาแฟ", "45"],
+            ["RoV", "150"],
         ]
 
         result = build_summary(rows)
 
         assert "ไม่พบคอลัมน์ที่ต้องการ" in result
+
+
+    @patch("features.morning_report.datetime")
+    def test_build_summary_with_new_gaming_headers(self, mock_datetime):
+        # Mock datetime.now(THAI_TZ)
+        mock_now = datetime(2024, 1, 14, 8, 0, 0, tzinfo=THAI_TZ)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        mock_datetime.strptime.side_effect = datetime.strptime
+
+        rows = [
+            ["วันที่", "รองเท้า", "ไซส์", "จำนวน", "ราคา", "ยอดรวม"],
+            ["2024-01-13T10:00:00+07:00", "Nike", "42", "2", "790", "1580"],
+            ["2024-01-13T11:00:00+07:00", "Adidas", "ทั่วไป", "1", "290", "290"],
+            ["2024-01-13T12:00:00+07:00", "Nike", "43", "1", "1890", "1890"],
+        ]
+
+        result = build_summary(rows)
+
+        mock_datetime.now.assert_called_once_with(THAI_TZ)
+        assert "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨" in result
+        assert "ยอดรวมทั้งหมด: 3760.00 บาท" in result
+        assert "Nike (42): 2 คู่" in result
+        assert "Nike (43): 1 คู่" in result
+        assert "Adidas: 1 คู่" in result
+        assert "ขายดีที่สุด: Nike (42)" in result
 
 
 class TestSendTelegramMessage:
