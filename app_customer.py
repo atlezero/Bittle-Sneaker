@@ -14,7 +14,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 # ── Page config ───────────────────────────────────────────────
-_logo = Image.open(PROJECT_ROOT / "pictures" / "logo.png")
+import base64
+from io import BytesIO
+
+logo_txt_path = PROJECT_ROOT / "pictures" / "logo_base64.txt"
+if logo_txt_path.exists():
+    try:
+        logo_data = base64.b64decode(logo_txt_path.read_text(encoding="utf-8"))
+        _logo = Image.open(BytesIO(logo_data))
+    except Exception:
+        _logo = Image.new("RGB", (128, 128), color="#1a1a2e")
+else:
+    _logo = Image.new("RGB", (128, 128), color="#1a1a2e")
+
 st.set_page_config(
     page_title="Bittle Sneaker — Sandy Bot",
     page_icon=_logo,
