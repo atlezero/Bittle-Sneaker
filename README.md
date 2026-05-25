@@ -19,7 +19,7 @@ pinned: false
 
 ## 🌐 Live Demo
 
-🔗 **[https://huggingface.co/spaces/atlez/milk-on-the-beach](https://huggingface.co/spaces/atlez/milk-on-the-beach)**
+🔗 **[https://huggingface.co/spaces/atlez/bittle-sneaker](https://huggingface.co/spaces/atlez/bittle-sneaker)**
 
 ## ✨ ฟีเจอร์หลัก
 

@@ -22,5 +22,6 @@ jobs:
         run: |
           git config user.email "deploy@github.com"
           git config user.name "GitHub Actions"
-          git remote add hf https://atlez:$HF_TOKEN@huggingface.co/spaces/atlez/milk-on-the-beach
+          git config lfs.allowincompletepush true
+          git remote add hf https://atlez:$HF_TOKEN@huggingface.co/spaces/atlez/bittle-sneaker
           git push hf main --force
