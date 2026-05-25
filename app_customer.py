@@ -26,7 +26,7 @@ from features.agent_harness import write_trace
 from features.sheets_client import get_sheet
 import uuid
 from features.memory import FirestoreMemory
-from features.drive_client import get_product_images_for_text
+from features.drive_client import get_product_images_for_text, find_product_images
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -310,6 +310,34 @@ if prompt:
     write_trace("rag_search", {"query": prompt, "chunks_found": len(context_chunks)})
     context = "\n---\n".join(context_chunks)
 
+    # ค้นหารูปภาพสินค้าใน Google Drive ล่วงหน้าก่อนที่จะตอบคำถาม
+    import re
+    
+    # ดึงรหัสสินค้าทั้งหมดที่ถูกอ้างถึงในข้อความแชทล่าสุดของลูกค้า และในเนื้อหา RAG Context
+    codes = re.findall(r'[A-Za-z]{2}-\d{3}', prompt + "\n" + context)
+    unique_codes = sorted(list(set(code.upper() for code in codes)))
+    
+    image_results = []
+    image_status_lines = []
+    
+    with st.spinner("Sandy กำลังค้นหาข้อมูลและรูปภาพสินค้า..."):
+        for code in unique_codes:
+            results = find_product_images(code)
+            if results:
+                image_status_lines.append(f"- รหัสสินค้า {code}: มีรูปภาพจริงพร้อมแสดงจำนวน {len(results)} รูป")
+                for idx, result in enumerate(results):
+                    image_results.append({
+                        "code": code,
+                        "image_bytes": result["bytes"],
+                        "name": result["name"],
+                        "index": idx + 1,
+                        "url": result.get("url", "")
+                    })
+            else:
+                image_status_lines.append(f"- รหัสสินค้า {code}: ไม่มีรูปภาพจริงในระบบ Google Drive")
+                
+    image_status_text = "\n".join(image_status_lines) if image_status_lines else "ไม่มีการอ้างถึงรหัสสินค้าใดๆ ในการค้นหานี้"
+
     # จัดเตรียมบทสนทนาประวัติย้อนหลังทั้งหมดให้ Gemini
     contents = []
     for msg in st.session_state.messages[:-1]:
@@ -318,9 +346,12 @@ if prompt:
             "parts": [{"text": msg["content"]}]
         })
     
-    # เทิร์นล่าสุด แนบ Context จาก RAG เข้าไปประกอบ
+    # เทิร์นล่าสุด แนบ Context จาก RAG และสถานะรูปภาพจริงเข้าประกอบ
     latest_prompt = f"""ข้อมูลประกอบการตอบคำถาม (ใช้เฉพาะข้อมูลนี้เท่านั้น):
 {context}
+
+[สถานะรูปภาพจริงของสินค้าในระบบ]:
+{image_status_text}
 
 คำถามล่าสุดของผู้ใช้: {prompt}"""
     
@@ -333,14 +364,19 @@ if prompt:
 พูดด้วยน้ำเสียงเป็นกันเอง อบอุ่น ใช้ภาษาวัยรุ่นเล็กน้อย มีหางเสียง (คะ/ค่ะ/ค่า) แต่ยังคงความเป็นมืออาชีพและสุภาพ
 ตอบเฉพาะจากข้อมูลประกอบการตอบคำถามที่ได้รับเท่านั้น ถ้าไม่พบข้อมูล ให้ตอบสุภาพว่าไม่ทราบ และแนะนำให้ลูกค้าทักแอดมินที่ Line OA: @bittlesneaker
 ห้ามแต่งราคา ห้ามแต่งไซส์ สภาพ หรือแต่งข้อมูลสินค้าปลอมขึ้นมาเองโดยเด็ดขาด
+ห้ามส่งรูปให้ลูกค้าเอง จนกว่าลูกค้าจะขอดูสินค้าชิ้นนั้นๆด้วยตัวเอง ห้ามนำรูปสินค้าตัวอื่นส่งไปเด็ดขาด
+
+[การจัดการกรณีสินค้ามีจำนวนมาก]:
+หากรองเท้าที่มีในผลการค้นหา (RAG Context) มีจำนวนมากเกินไป (มากกว่า 3 คู่ขึ้นไป) ห้ามลิสต์รายชื่อรองเท้าทั้งหมดให้ลูกค้าในคราวเดียว เพราะจะทำให้สับสน ให้คุณเลือกมาแนะนำเพียง 2-3 คู่ที่น่าสนใจที่สุดหรือตรงความต้องการมากที่สุดก่อน จากนั้นให้ถามคำถามเพิ่มเติมอย่างใส่ใจและน่ารัก (เช่น ถามไซส์ รุ่น หรือโทนสีที่ตามหาเป็นพิเศษ) เพื่อช่วยสโคป (scope) และกรองผลลัพธ์สินค้าให้แคบลงและตรงใจลูกค้ามากยิ่งขึ้น
 
 [ข้อมูลเพิ่มเติมเรื่องรูปภาพ]:
-ระบบของเราเชื่อมต่อกับ Google Drive และจะดึงรูปภาพสินค้าจริงมาแสดงผลให้ลูกค้าดูใต้กล่องข้อความแชทโดยอัตโนมัติทันทีที่คุณระบุรหัสสินค้า (เช่น NK-002, AD-001) ในคำตอบของคุณ
-ดังนั้น หากลูกค้าขอดูรูปภาพสินค้า หรือคุณต้องการแนะนำสินค้าชิ้นใด ให้ระบุรหัสสินค้าคู่ของรองเท้าตัวนั้นในข้อความตอบกลับเสมอ และแจ้งลูกค้าอย่างน่ารักว่า "หนูได้ดึงรูปภาพจริงของคู่ [รหัสสินค้า] มาแสดงให้ชมที่ด้านล่างเรียบร้อยแล้วนะคะ!" ห้ามตอบปฏิเสธว่าไม่มีรูปภาพเด็ดขาด"""
+ระบบของเราเชื่อมต่อกับ Google Drive และคุณสามารถตรวจสอบ [สถานะรูปภาพจริงของสินค้าในระบบ] ได้จากข้อมูลประกอบการตอบคำถาม:
+1. หากสินค้าคู่นั้นระบุว่า "มีรูปภาพจริงพร้อมแสดง" ให้บอกลูกค้าอย่างน่ารักว่า "หนูได้ดึงรูปภาพจริงของคู่ [รหัสสินค้า] มาแสดงให้ชมที่ด้านล่างเรียบร้อยแล้วนะคะ!" เสมอ
+2. หากสินค้าคู่นั้นระบุว่า "ไม่มีรูปภาพจริงในระบบ Google Drive" หรือไม่มีรูปภาพเด็ดขาด ห้ามบอกว่าจะแสดงรูปภาพด้านล่างหรือบอกจะส่งให้เด็ดขาด! ให้แจ้งลูกค้าอย่างสุภาพและจริงใจว่า "ขออภัยด้วยนะคะ ตอนนี้คู่ [รหัสสินค้า] ยังไม่มีรูปภาพจริงในระบบค่ะ หากคุณลูกค้าต้องการดูรูปภาพเพิ่มเติม สามารถทักหาแอดมินที่ Line OA: @bittlesneaker เพื่อให้แอดมินช่วยถ่ายรูปส่งให้ได้เลยนะคะ!"
+3. หากลูกค้าถามหาสินค้าทั่วไปหรือขอรูปแต่ในระบบไม่ได้อ้างถึงรหัสสินค้าใดๆ ให้ตอบอย่างสุภาพว่าไม่มีรูปภาพในระบบ และแนะนำให้สอบถามแอดมินทาง Line OA: @bittlesneaker เช่นเดียวกัน"""
 
     with st.chat_message("assistant"):
-        image_results = []
-        with st.spinner("Sandy กำลังค้นหาข้อมูล..."):
+        with st.spinner("Sandy กำลังคิดคำตอบ..."):
             try:
                 response = client.models.generate_content(
                     model=MODEL,
@@ -357,12 +393,23 @@ if prompt:
 
         st.write(answer)
         
-        # ค้นหาภาพสินค้าจาก Google Drive
-        image_results = get_product_images_for_text(prompt + "\n" + answer)
-        if image_results:
+        # กรองแสดงเฉพาะภาพสินค้าที่รหัสสินค้าถูกระบุอยู่ในคำตอบของ AI เท่านั้น และลูกค้าต้องขอดูรูปภาพด้วยตัวเอง
+        filtered_image_results = []
+        
+        # ตรวจสอบว่าลูกค้ามีเจตนาขอดูรูปภาพจริงหรือไม่
+        image_keywords = ["รูป", "ภาพ", "ดู", "เห็น", "โชว์", "ขอดู", "ขอรูป", "ส่งรูป", "รูปจริง", "มีรูป", "ขอดูสินค้า", "ขอดูรูปสินค้า", "มีรูปไหม", "ขอดูหน่อย"]
+        ask_for_images = any(kw in prompt for kw in image_keywords)
+        
+        if ask_for_images and image_results:
+            mentioned_codes = re.findall(r'[A-Za-z]{2}-\d{3}', answer)
+            mentioned_codes_upper = set(c.upper() for c in mentioned_codes)
+            filtered_image_results = [img for img in image_results if img["code"].upper() in mentioned_codes_upper]
+            
+        # แสดงภาพสินค้าจาก Google Drive ที่ผ่านการกรองแล้ว
+        if filtered_image_results:
             from collections import defaultdict
             images_by_code = defaultdict(list)
-            for img in image_results:
+            for img in filtered_image_results:
                 images_by_code[img["code"]].append(img)
             
             for code, imgs in images_by_code.items():
@@ -378,5 +425,5 @@ if prompt:
     # บันทึกประวัติ (ไม่บันทึก bytes ลง Firestore เพราะใหญ่เกินไป)
     memory.save_message("assistant", answer)
     write_trace("rag_response", {"source": "customer_web", "answer": answer})
-    st.session_state.messages.append({"role": "assistant", "content": answer, "images": image_results})
+    st.session_state.messages.append({"role": "assistant", "content": answer, "images": filtered_image_results})
 
