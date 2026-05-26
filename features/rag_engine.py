@@ -196,6 +196,9 @@ class RAGEngine:
     def _tokenize(text: str) -> list[str]:
         """แบ่งคำอย่างง่าย: lowercase + แยกตัวอักษรและตัวเลข"""
         text = text.lower()
+        # แยกตัวเลขกับตัวอักษรออกจากกันเพื่อแก้ปัญหา 42EU -> 42 eu, nk002 -> nk 002
+        text = re.sub(r'(\d+)([a-z]+)', r'\1 \2', text)
+        text = re.sub(r'([a-z]+)(\d+)', r'\1 \2', text)
         # จัดการทั้ง ASCII word และ Unicode (เช่น ภาษาไทย) แบบ char-level bigram
         ascii_words = re.findall(r"[a-z0-9]+", text)
         # สำหรับภาษาไทย ใช้ unigram character เพื่อให้พอจับคำได้บ้าง
