@@ -257,6 +257,30 @@ def parse_user_command(text: str) -> dict:
     return json.loads(raw)
 
 
+def prepare_telegram_photo(img_bytes: bytes, mime_type: str) -> tuple[bytes, str]:
+    """
+    ตรวจสอบและแปลงประเภทไฟล์ภาพให้รองรับบน Telegram (เช่น แปลง AVIF/HEIC เป็น JPEG)
+    """
+    supported_mimes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    mime_lower = str(mime_type).lower().strip()
+    if mime_lower in supported_mimes:
+        ext = "jpg" if "jpeg" in mime_lower or "jpg" in mime_lower else mime_lower.split("/")[-1]
+        return img_bytes, f"photo.{ext}"
+        
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(img_bytes))
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGB")
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=85)
+        return out.getvalue(), "photo.jpg"
+    except Exception as e:
+        # หากแปลงไม่สำเร็จ คืนค่าดั้งเดิม
+        return img_bytes, "photo.jpg"
+
+
 # ── Command Handlers ──────────────────────────────────────────
 
 @bot.message_handler(commands=["start", "help"])
@@ -438,15 +462,22 @@ def cmd_photo(message):
         # ส่งรูปภาพทีละรูป
         for idx, img in enumerate(results, 1):
             img_bytes = img.get("bytes")
-            img_name = img.get("name", f"photo_{idx}")
+            mime_type = img.get("mime", "image/jpeg")
             if img_bytes:
-                photo = io.BytesIO(img_bytes)
-                photo.name = img_name
-                bot.send_photo(
-                    message.chat.id,
-                    photo,
-                    caption=f"📸 {product_code} — มุมที่ {idx}/{len(results)}",
-                )
+                img_bytes_to_send, safe_name = prepare_telegram_photo(img_bytes, mime_type)
+                try:
+                    photo = io.BytesIO(img_bytes_to_send)
+                    photo.name = safe_name
+                    bot.send_photo(
+                        message.chat.id,
+                        photo,
+                        caption=f"📸 {product_code} — มุมที่ {idx}/{len(results)}",
+                    )
+                except Exception as send_err:
+                    bot.send_message(
+                        message.chat.id,
+                        f"⚠️ ไม่สามารถส่งรูปมุมที่ {idx} ได้: {send_err}"
+                    )
 
     except Exception as e:
         bot.reply_to(message, f"❌ เกิดข้อผิดพลาดในการดึงรูป: {e}")
@@ -630,14 +661,22 @@ def handle_natural_language(message):
                     bot.reply_to(message, f"📸 พบรูปสินค้า `{sku}` จำนวน {len(results)} รูป")
                     for idx, img in enumerate(results, 1):
                         img_bytes = img.get("bytes")
+                        mime_type = img.get("mime", "image/jpeg")
                         if img_bytes:
-                            photo = io.BytesIO(img_bytes)
-                            photo.name = img.get("name", f"photo_{idx}")
-                            bot.send_photo(
-                                message.chat.id,
-                                photo,
-                                caption=f"📸 {sku} — มุมที่ {idx}/{len(results)}",
-                            )
+                            img_bytes_to_send, safe_name = prepare_telegram_photo(img_bytes, mime_type)
+                            try:
+                                photo = io.BytesIO(img_bytes_to_send)
+                                photo.name = safe_name
+                                bot.send_photo(
+                                    message.chat.id,
+                                    photo,
+                                    caption=f"📸 {sku} — มุมที่ {idx}/{len(results)}",
+                                )
+                            except Exception as send_err:
+                                bot.send_message(
+                                    message.chat.id,
+                                    f"⚠️ ไม่สามารถส่งรูปมุมที่ {idx} ได้: {send_err}"
+                                )
 
             elif action == "get_customer_profile":
                 result = get_customer_profile(**args)
