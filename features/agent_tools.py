@@ -478,6 +478,7 @@ def get_sales_today() -> dict:
                 today_rows.append(r)
 
         total_revenue = 0.0
+        total_profit = 0.0
         total_items = 0
         menu_summary = {}
 
@@ -516,11 +517,20 @@ def get_sales_today() -> dict:
             except ValueError:
                 pass
 
+            profit_val = r.get("กำไร", 0.0)
+            profit = 0.0
+            try:
+                profit = float(profit_val)
+            except (ValueError, TypeError):
+                pass
+
             if menu not in menu_summary:
-                menu_summary[menu] = {"quantity": 0, "total": 0.0}
+                menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
             menu_summary[menu]["quantity"] += qty
             menu_summary[menu]["total"] += tot
+            menu_summary[menu]["profit"] += profit
             total_revenue += tot
+            total_profit += profit
             total_items += qty
 
         return {
@@ -528,6 +538,7 @@ def get_sales_today() -> dict:
             "date": today.isoformat(),
             "total_revenue": total_revenue,
             "total_items": total_items,
+            "total_profit": total_profit,
             "menu_summary": menu_summary,
         }
 
@@ -554,6 +565,7 @@ def get_sales_today() -> dict:
             today_orders.append(o)
 
     total_revenue = 0.0
+    total_profit = 0.0
     total_items = 0
     menu_summary = {}
 
@@ -563,6 +575,12 @@ def get_sales_today() -> dict:
         try:
             price_val = float(o.get("ราคาที่ขาย", 0.0) or 0.0)
         except ValueError:
+            pass
+
+        profit_val = 0.0
+        try:
+            profit_val = float(o.get("กำไร", 0.0) or 0.0)
+        except (ValueError, TypeError):
             pass
 
         p_info = sku_to_product.get(sku, {})
@@ -583,10 +601,12 @@ def get_sales_today() -> dict:
         menu = f"{full_sneaker}_{size}" if size and size != "ทั่วไป" else full_sneaker
 
         if menu not in menu_summary:
-            menu_summary[menu] = {"quantity": 0, "total": 0.0}
+            menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
         menu_summary[menu]["quantity"] += 1
         menu_summary[menu]["total"] += price_val
+        menu_summary[menu]["profit"] += profit_val
         total_revenue += price_val
+        total_profit += profit_val
         total_items += 1
 
     return {
@@ -594,6 +614,7 @@ def get_sales_today() -> dict:
         "date": today.isoformat(),
         "total_revenue": total_revenue,
         "total_items": total_items,
+        "total_profit": total_profit,
         "menu_summary": menu_summary,
     }
 
@@ -716,6 +737,367 @@ def get_customer_profile(
     }
 
 
+def get_sales_summary(period: str = "today") -> dict:
+    """
+    สรุปยอดขาย: today / month / year
+    - today: ยอดขายวันนี้ (เหมือน get_sales_today)
+    - month: ยอดขายเดือนนี้
+    - year: ยอดขายปีนี้
+    """
+    if period == "today":
+        return get_sales_today()
+
+    products_sheet = _get_sheet_safe("Products")
+    orders_sheet = _get_sheet_safe("Orders")
+
+    is_single_sheet = False
+    if hasattr(products_sheet, "id") and hasattr(orders_sheet, "id"):
+        is_single_sheet = (products_sheet.id == orders_sheet.id)
+    else:
+        is_single_sheet = (products_sheet == orders_sheet)
+
+    now = datetime.now(THAI_TZ)
+
+    if is_single_sheet:
+        # Legacy single-sheet mode
+        rows = products_sheet.get_all_records()
+        filtered = []
+        for r in rows:
+            raw_ts = str(r.get("วันที่", "")).strip()
+            if not raw_ts:
+                continue
+            try:
+                row_date = datetime.fromisoformat(raw_ts).date()
+            except ValueError:
+                continue
+
+            if period == "month" and (row_date.year != now.year or row_date.month != now.month):
+                continue
+            elif period == "year" and row_date.year != now.year:
+                continue
+
+            filtered.append(r)
+
+        total_revenue = 0.0
+        total_profit = 0.0
+        total_items = 0
+        menu_summary = {}
+
+        for r in filtered:
+            brand = str(r.get("แบรนด์") or "").strip()
+            model_name = str(r.get("รุ่น") or "").strip()
+            sku = str(r.get("รหัสสินค้า") or "").strip()
+            size = str(r.get("ไซส์") or "ทั่วไป").strip()
+
+            name_parts = []
+            if sku and sku != "ไม่ระบุ":
+                name_parts.append(f"[{sku}]")
+            if brand and brand != "ไม่ระบุ":
+                name_parts.append(brand)
+            if model_name and model_name != "ไม่ระบุ":
+                name_parts.append(model_name)
+            full_sneaker = " ".join(name_parts) if name_parts else "ไม่ระบุ"
+            menu = f"{full_sneaker}_{size}" if size and size != "ทั่วไป" else full_sneaker
+
+            qty = 1
+            try:
+                qty = int(float(r.get("จำนวน", 1)))
+            except (ValueError, TypeError):
+                pass
+
+            tot = 0.0
+            try:
+                tot = float(r.get("ยอดรวม", 0.0))
+            except (ValueError, TypeError):
+                pass
+
+            profit_val = 0.0
+            try:
+                profit_val = float(r.get("กำไร", 0.0))
+            except (ValueError, TypeError):
+                pass
+
+            if menu not in menu_summary:
+                menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
+            menu_summary[menu]["quantity"] += qty
+            menu_summary[menu]["total"] += tot
+            menu_summary[menu]["profit"] += profit_val
+            total_revenue += tot
+            total_profit += profit_val
+            total_items += qty
+
+        period_label = "เดือนนี้" if period == "month" else "ปีนี้"
+        return {
+            "status": "success",
+            "period": period,
+            "period_label": period_label,
+            "date": now.date().isoformat(),
+            "total_revenue": total_revenue,
+            "total_items": total_items,
+            "total_profit": total_profit,
+            "menu_summary": menu_summary,
+        }
+
+    # Relational multi-sheet mode
+    orders = orders_sheet.get_all_records()
+    products = products_sheet.get_all_records()
+
+    sku_to_product = {}
+    for p in products:
+        p_sku = str(p.get("รหัสสินค้า", "")).strip()
+        if p_sku:
+            sku_to_product[p_sku] = p
+
+    filtered_orders = []
+    for o in orders:
+        raw_ts = str(o.get("วันที่ขาย", "")).strip()
+        if not raw_ts:
+            continue
+        try:
+            row_date = datetime.fromisoformat(raw_ts).date()
+        except ValueError:
+            continue
+
+        if period == "month" and (row_date.year != now.year or row_date.month != now.month):
+            continue
+        elif period == "year" and row_date.year != now.year:
+            continue
+
+        filtered_orders.append(o)
+
+    total_revenue = 0.0
+    total_profit = 0.0
+    total_items = 0
+    menu_summary = {}
+
+    for o in filtered_orders:
+        sku = str(o.get("รหัสสินค้า", "")).strip()
+        price_val = 0.0
+        try:
+            price_val = float(o.get("ราคาที่ขาย", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            pass
+
+        profit_val = 0.0
+        try:
+            profit_val = float(o.get("กำไร", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            pass
+
+        p_info = sku_to_product.get(sku, {})
+        brand = str(p_info.get("แบรนด์") or "ไม่ระบุ").strip()
+        model_name = str(p_info.get("รุ่น") or "ไม่ระบุ").strip()
+        size = str(p_info.get("ไซส์ EU") or p_info.get("ไซส์ US") or "ทั่วไป").strip()
+        if size == "ไม่ระบุ" or not size:
+            size = "ทั่วไป"
+
+        name_parts = []
+        if sku and sku != "ไม่ระบุ":
+            name_parts.append(f"[{sku}]")
+        if brand and brand != "ไม่ระบุ":
+            name_parts.append(brand)
+        if model_name and model_name != "ไม่ระบุ":
+            name_parts.append(model_name)
+        full_sneaker = " ".join(name_parts) if name_parts else "ไม่ระบุ"
+        menu = f"{full_sneaker}_{size}" if size and size != "ทั่วไป" else full_sneaker
+
+        if menu not in menu_summary:
+            menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
+        menu_summary[menu]["quantity"] += 1
+        menu_summary[menu]["total"] += price_val
+        menu_summary[menu]["profit"] += profit_val
+        total_revenue += price_val
+        total_profit += profit_val
+        total_items += 1
+
+    period_label = "เดือนนี้" if period == "month" else "ปีนี้"
+    return {
+        "status": "success",
+        "period": period,
+        "period_label": period_label,
+        "date": now.date().isoformat(),
+        "total_revenue": total_revenue,
+        "total_items": total_items,
+        "total_profit": total_profit,
+        "menu_summary": menu_summary,
+    }
+
+
+def get_sales_by_date(date_str: str) -> dict:
+    """
+    สรุปยอดขายสำหรับวันที่ระบุ (รูปแบบ YYYY-MM-DD)
+    """
+    try:
+        target_date = datetime.fromisoformat(date_str.strip()).date()
+    except ValueError:
+        return {
+            "status": "error",
+            "message": f"รูปแบบวันที่ไม่ถูกต้อง: {date_str} (ต้องเป็น YYYY-MM-DD)"
+        }
+
+    products_sheet = _get_sheet_safe("Products")
+    orders_sheet = _get_sheet_safe("Orders")
+
+    is_single_sheet = False
+    if hasattr(products_sheet, "id") and hasattr(orders_sheet, "id"):
+        is_single_sheet = (products_sheet.id == orders_sheet.id)
+    else:
+        is_single_sheet = (products_sheet == orders_sheet)
+
+    if is_single_sheet:
+        # Legacy single-sheet mode
+        rows = products_sheet.get_all_records()
+        target_rows = []
+        for r in rows:
+            raw_ts = str(r.get("วันที่", "")).strip()
+            if not raw_ts:
+                continue
+            try:
+                row_date = datetime.fromisoformat(raw_ts).date()
+            except ValueError:
+                continue
+            if row_date == target_date:
+                target_rows.append(r)
+
+        total_revenue = 0.0
+        total_profit = 0.0
+        total_items = 0
+        menu_summary = {}
+
+        for r in target_rows:
+            brand = str(r.get("แบรนด์") or "").strip()
+            model_name = str(r.get("รุ่น") or "").strip()
+            sku = str(r.get("รหัสสินค้า") or "").strip()
+            sneaker = str(r.get("รองเท้า") or r.get("ชื่อเกม") or "").strip()
+            size = str(r.get("ไซส์") or r.get("เกรดไอดี") or "ทั่วไป").strip()
+
+            if brand or model_name:
+                name_parts = []
+                if sku and sku != "ไม่ระบุ":
+                    name_parts.append(f"[{sku}]")
+                if brand and brand != "ไม่ระบุ":
+                    name_parts.append(brand)
+                if model_name and model_name != "ไม่ระบุ":
+                    name_parts.append(model_name)
+                full_sneaker = " ".join(name_parts) if name_parts else "ไม่ระบุ"
+            else:
+                full_sneaker = sneaker if sneaker else str(r.get("เมนู") or "ไม่ระบุ").strip()
+
+            menu = f"{full_sneaker}_{size}" if size and size != "ทั่วไป" else full_sneaker
+
+            qty = 1
+            try:
+                qty = int(float(r.get("จำนวน", 1)))
+            except (ValueError, TypeError):
+                pass
+
+            tot = 0.0
+            try:
+                tot = float(r.get("ยอดรวม", 0.0))
+            except (ValueError, TypeError):
+                pass
+
+            profit_val = 0.0
+            try:
+                profit_val = float(r.get("กำไร", 0.0))
+            except (ValueError, TypeError):
+                pass
+
+            if menu not in menu_summary:
+                menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
+            menu_summary[menu]["quantity"] += qty
+            menu_summary[menu]["total"] += tot
+            menu_summary[menu]["profit"] += profit_val
+            total_revenue += tot
+            total_profit += profit_val
+            total_items += qty
+
+        return {
+            "status": "success",
+            "date": target_date.isoformat(),
+            "total_revenue": total_revenue,
+            "total_items": total_items,
+            "total_profit": total_profit,
+            "menu_summary": menu_summary,
+        }
+
+    # Relational multi-sheet mode
+    orders = orders_sheet.get_all_records()
+    products = products_sheet.get_all_records()
+
+    sku_to_product = {}
+    for p in products:
+        p_sku = str(p.get("รหัสสินค้า", "")).strip()
+        if p_sku:
+            sku_to_product[p_sku] = p
+
+    target_orders = []
+    for o in orders:
+        raw_ts = str(o.get("วันที่ขาย", "")).strip()
+        if not raw_ts:
+            continue
+        try:
+            row_date = datetime.fromisoformat(raw_ts).date()
+        except ValueError:
+            continue
+        if row_date == target_date:
+            target_orders.append(o)
+
+    total_revenue = 0.0
+    total_profit = 0.0
+    total_items = 0
+    menu_summary = {}
+
+    for o in target_orders:
+        sku = str(o.get("รหัสสินค้า", "")).strip()
+        price_val = 0.0
+        try:
+            price_val = float(o.get("ราคาที่ขาย", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            pass
+
+        profit_val = 0.0
+        try:
+            profit_val = float(o.get("กำไร", 0.0) or 0.0)
+        except (ValueError, TypeError):
+            pass
+
+        p_info = sku_to_product.get(sku, {})
+        brand = str(p_info.get("แบรนด์") or "ไม่ระบุ").strip()
+        model_name = str(p_info.get("รุ่น") or "ไม่ระบุ").strip()
+        size = str(p_info.get("ไซส์ EU") or p_info.get("ไซส์ US") or "ทั่วไป").strip()
+        if size == "ไม่ระบุ" or not size:
+            size = "ทั่วไป"
+
+        name_parts = []
+        if sku and sku != "ไม่ระบุ":
+            name_parts.append(f"[{sku}]")
+        if brand and brand != "ไม่ระบุ":
+            name_parts.append(brand)
+        if model_name and model_name != "ไม่ระบุ":
+            name_parts.append(model_name)
+        full_sneaker = " ".join(name_parts) if name_parts else "ไม่ระบุ"
+        menu = f"{full_sneaker}_{size}" if size and size != "ทั่วไป" else full_sneaker
+
+        if menu not in menu_summary:
+            menu_summary[menu] = {"quantity": 0, "total": 0.0, "profit": 0.0}
+        menu_summary[menu]["quantity"] += 1
+        menu_summary[menu]["total"] += price_val
+        menu_summary[menu]["profit"] += profit_val
+        total_revenue += price_val
+        total_profit += profit_val
+        total_items += 1
+
+    return {
+        "status": "success",
+        "date": target_date.isoformat(),
+        "total_revenue": total_revenue,
+        "total_items": total_items,
+        "total_profit": total_profit,
+        "menu_summary": menu_summary,
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # Registry
 # ─────────────────────────────────────────────────────────────
@@ -723,6 +1105,8 @@ def get_customer_profile(
 TOOLS = {
     "log_sale": log_sale,
     "get_sales_today": get_sales_today,
+    "get_sales_summary": get_sales_summary,
+    "get_sales_by_date": get_sales_by_date,
     "check_stock": check_stock,
     "generate_social_caption": generate_social_caption,
     "get_customer_profile": get_customer_profile,

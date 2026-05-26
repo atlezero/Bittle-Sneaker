@@ -322,7 +322,7 @@ if prompt:
     write_trace("rag_search", {"query": prompt, "chunks_found": len(context_chunks)})
     context = "\n---\n".join(context_chunks)
 
-    # ค้นหารูปภาพสินค้าใน Google Drive ล่วงหน้าก่อนที่จะตอบคำถาม
+    # ค้นหารูปภาพสินค้าใน Google Drive ล่วงหน้าเฉพาะเมื่อลูกค้าขอดูรูปภาพจริงๆ เท่านั้น
     import re
     
     # ดึงรหัสสินค้าทั้งหมดที่ถูกอ้างถึงในข้อความแชทล่าสุดของลูกค้า และในเนื้อหา RAG Context
@@ -332,23 +332,39 @@ if prompt:
     image_results = []
     image_status_lines = []
     
-    with st.spinner("Sandy กำลังค้นหาข้อมูลและรูปภาพสินค้า..."):
-        for code in unique_codes:
-            results = find_product_images(code)
-            if results:
-                image_status_lines.append(f"- รหัสสินค้า {code}: มีรูปภาพจริงพร้อมแสดงจำนวน {len(results)} รูป")
-                for idx, result in enumerate(results):
-                    image_results.append({
-                        "code": code,
-                        "image_bytes": result["bytes"],
-                        "name": result["name"],
-                        "index": idx + 1,
-                        "url": result.get("url", "")
-                    })
-            else:
-                image_status_lines.append(f"- รหัสสินค้า {code}: ไม่มีรูปภาพจริงในระบบ Google Drive")
-                
-    image_status_text = "\n".join(image_status_lines) if image_status_lines else "ไม่มีการอ้างถึงรหัสสินค้าใดๆ ในการค้นหานี้"
+    # ตรวจสอบเจตนาขอดูรูปภาพจริงของสินค้าชิ้นนั้นๆ เท่านั้น จากข้อความลูกค้า
+    # คำยกเว้นเพื่อป้องกัน false positive ในภาษาไทย (เช่น สุภาพ, ดูดี, สุขภาพ, กายภาพ)
+    exclusions = ["สุภาพ", "สุขภาพ", "คุณภาพ", "ประสิทธิภาพ", "กายภาพ", "ดูดี", "ดูเหมือน", "ดูแล้ว", "ดูแล", "เอ็นดู", "ดึงดูด", "หดหู่", "น่าดู"]
+    clean_prompt = prompt.strip().lower()
+    for ex in exclusions:
+        clean_prompt = clean_prompt.replace(ex, "")
+        
+    intent_phrases = [
+        "ขอดูรูป", "ขอรูป", "ดูรูป", "ส่งรูป", "โชว์รูป", "อยากเห็นรูป", "ขอดูภาพ", "ขอภาพ", "ดูภาพ", "ส่งภาพ", "โชว์ภาพ",
+        "รูปภาพ", "รูปถ่าย", "ภาพถ่าย", "รูปจริง", "ภาพจริง", "ขอดูหน่อย", "อยากเห็น", "ขอดูสินค้า", "ขอดูคู่นี้", "ขอดูรุ่นนี้",
+        "มีรูป", "มีภาพ", "ขอดู"
+    ]
+    ask_for_images = any(phrase in clean_prompt for phrase in intent_phrases)
+    
+    if ask_for_images:
+        with st.spinner("Sandy กำลังค้นหาข้อมูลและรูปภาพสินค้า..."):
+            for code in unique_codes:
+                results = find_product_images(code)
+                if results:
+                    image_status_lines.append(f"- รหัสสินค้า {code}: มีรูปภาพจริงพร้อมแสดงจำนวน {len(results)} รูป")
+                    for idx, result in enumerate(results):
+                        image_results.append({
+                            "code": code,
+                            "image_bytes": result["bytes"],
+                            "name": result["name"],
+                            "index": idx + 1,
+                            "url": result.get("url", "")
+                        })
+                else:
+                    image_status_lines.append(f"- รหัสสินค้า {code}: ไม่มีรูปภาพจริงในระบบ Google Drive")
+        image_status_text = "\n".join(image_status_lines) if image_status_lines else "ไม่มีการอ้างถึงรหัสสินค้าใดๆ"
+    else:
+        image_status_text = "ลูกค้าคุยสอบถามข้อมูลทั่วไปและไม่ได้มีเจตนาขอดูรูปภาพในเทิร์นนี้ (ห้ามบอกว่าจะแสดงรูปภาพสินค้าด้านล่างหรือดึงภาพจริงมาเด็ดขาด)"
 
     # จัดเตรียมบทสนทนาประวัติย้อนหลังทั้งหมดให้ Gemini
     contents = []
@@ -407,10 +423,6 @@ if prompt:
         
         # กรองแสดงเฉพาะภาพสินค้าที่รหัสสินค้าถูกระบุอยู่ในคำตอบของ AI เท่านั้น และลูกค้าต้องขอดูรูปภาพด้วยตัวเอง
         filtered_image_results = []
-        
-        # ตรวจสอบว่าลูกค้ามีเจตนาขอดูรูปภาพจริงหรือไม่
-        image_keywords = ["รูป", "ภาพ", "ดู", "เห็น", "โชว์", "ขอดู", "ขอรูป", "ส่งรูป", "รูปจริง", "มีรูป", "ขอดูสินค้า", "ขอดูรูปสินค้า", "มีรูปไหม", "ขอดูหน่อย"]
-        ask_for_images = any(kw in prompt for kw in image_keywords)
         
         if ask_for_images and image_results:
             mentioned_codes = re.findall(r'[A-Za-z]{2}-\d{3}', answer)

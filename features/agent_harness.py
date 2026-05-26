@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # agent_harness.py
 
 import json
@@ -17,25 +18,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 load_dotenv(PROJECT_ROOT / ".env")
 
+# ── Missing variables ─────────────────────────────────────────
+THAI_TZ = ZoneInfo("Asia/Bangkok")
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+MODEL = "gemini-3.1-flash-lite"
+
 from features.agent_tools import TOOLS
 
 # ─────────────────────────────────────────────────────────────
 # Gemini setup
-# ─────────────────────────────────────────────────────────────
-
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
-
-MODEL = "gemini-3.1-flash-lite"
-
-THAI_TZ = ZoneInfo("Asia/Bangkok")
-
-
-# ─────────────────────────────────────────────────────────────
-# System instruction
-# ─────────────────────────────────────────────────────────────
-
 SYSTEM_INSTRUCTION = """
 คุณคือ Sandy ผู้ช่วย AI ของร้าน Bittle Sneaker
 หน้าที่ของคุณคือแปลงคำสั่งภาษาไทยเป็น JSON action
@@ -54,6 +45,58 @@ SYSTEM_INSTRUCTION = """
    - price: ราคาขายต่อหน่วยเป็นบาท (Float)
    - color: สีของรองเท้า (หากมีระบุในข้อความ เช่น "สีแดง", "ขาว-เทา", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
    - condition: สภาพรองเท้า (หากมีระบุในข้อความ เช่น "95%", "90%", "สภาพดี", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - condition_details: รายละเอียดสภาพรองเท้า (หากมีระบุรายละเอียดเพิ่มเติม, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - cost_price: ราคาทุนของรองเท้า (Float, หากไม่มีระบุให้ใส่ 0.0)
+   - year: ปีที่ผลิต (หากมีระบุ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - has_box: มีกล่องหรือไม่ (ระบุเป็น "มีกล่อง" หรือ "ไม่ระบุ")
+   - has_receipt: มีใบเสร็จหรือไม่ (ระบุเป็น "มีใบเสร็จ" หรือ "ไม่ระบุ")
+   - source_id: รหัสแหล่งที่มา (หากมีระบุ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   
+   - customer_name: ชื่อลูกค้า (หากมีระบุในข้อความ เช่น "คุณจอย", "สมชาย", หากไม่มีระบุให้ใส่ "ลูกค้าทั่วไป")
+   - customer_ig: IG ของลูกค้า (หากมีระบุในข้อความ เช่น "@joy_street", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - customer_line: Line ID ของลูกค้า (หากมีระบุในข้อความ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - customer_phone: เบอร์โทรของลูกค้า (หากมีระบุในข้อความ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   
+   - sales_channel: ช่องทางขาย (หากมีระบุในข้อความ เช่น "IG", "Line", "Facebook", "หน้าร้าน", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - payment_method: วิธีชำระเงิน (หากมีระบุในข้อความ เช่น "โอนเงิน", "บัตรเครดิต", "เงินสด", หากไม่มีระบุให้ใส่ "ไม่ระบุ")
+   - payment_status: สถานะชำระเงิน (หากมีระบุ เช่น "ชำระแล้ว", "รอตรวจสอบ", หากไม่มีระบุให้ใส่ "ชำระแล้ว")
+
+   ตัวอย่าง:
+   {"action": "log_sale", "args": {"sku": "NK-001", "brand": "Nike", "model": "Dunk Low", "size": "42", "quantity": 1, "price": 3500.0, "customer_name": "คุณจอย", "sales_channel": "IG", "payment_method": "โอนเงิน"}}
+
+2. สรุปยอดขายวันนี้ (get_sales_today):
+   {"action": "get_sales_today", "args": {}}
+
+3. เช็คสต็อก (check_stock):
+   อาร์กิวเมนต์ใน args (ใส่ข้อมูลที่พยายามค้นหาตามที่ระบุในข้อความ):
+   - brand: แบรนด์รองเท้า (เช่น Nike, Adidas, หากไม่ระบุให้ใส่ null หรือละเว้น)
+   - model: รุ่นรองเท้า (เช่น Dunk Low, Samba, หากไม่ระบุให้ใส่ null หรือละเว้น)
+   - size: ไซส์รองเท้า (เช่น 42, 43, หากไม่ระบุให้ใส่ null หรือละเว้น)
+   
+   ตัวอย่าง:
+   {"action": "check_stock", "args": {"brand": "Nike", "size": "42"}}
+
+4. เจนแคปชั่นขายรองเท้า (generate_social_caption):
+   อาร์กิวเมนต์ใน args:
+   - product_name: ชื่อรองเท้า/ข้อมูลสินค้า (เช่น "Nike Air Force 1 '07 ไซส์ 42.5 สภาพ 95%")
+   - price: ราคาขายต่อหน่วยเป็นบาท (Float)
+   
+   ตัวอย่าง:
+   {"action": "generate_social_caption", "args": {"product_name": "Nike Dunk Low Panda ไซส์ 42 สภาพ 90%", "price": 2490.0}}
+
+5. ค้นหาประวัติหรือข้อมูลลูกค้า (get_customer_profile):
+   อาร์กิวเมนต์ใน args (ดึงตามที่ระบุมา):
+   - name: ชื่อลูกค้า (หากระบุ)
+   - ig: IG (หากระบุ)
+   - line: Line ID (หากระบุ)
+   - phone: เบอร์โทรศัพท์ (หากระบุ)
+   
+   ตัวอย่าง:
+   {"action": "get_customer_profile", "args": {"name": "จอย"}}
+
+6. คำสั่งอื่นๆ ที่ไม่เกี่ยวข้องหรือไม่เข้าใจ:
+   {"action": "unknown", "args": {}}
+
    - condition_details: รายละเอียดสภาพรองเท้า (หากมีระบุรายละเอียดเพิ่มเติม, หากไม่มีระบุให้ใส่ "ไม่ระบุ")
    - cost_price: ราคาทุนของรองเท้า (Float, หากไม่มีระบุให้ใส่ 0.0)
    - year: ปีที่ผลิต (หากมีระบุ, หากไม่มีระบุให้ใส่ "ไม่ระบุ")

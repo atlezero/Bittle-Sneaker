@@ -1,100 +1,119 @@
-# Unit Tests
+# 🧪 Bittle Sneaker Testing Suite
 
-โปรเจกต์นี้ใช้ `pytest` สำหรับ unit tests
+คู่มือและข้อมูลการรันชุดทดสอบความถูกต้องเสถียรภาพระบบ (Unit & Integration Tests) ของโปรเจกต์ **Bittle Sneaker** 
 
-## ติดตั้ง dependencies
+ระบบใช้เฟรมเวิร์ก **`pytest`** เป็นเครื่องมือหลักในการเขียนและการรันชุดทดสอบ เพื่อรับประกันคุณภาพและการทำงานที่ถูกต้องของฟังก์ชันระบบทั้งหมด โดยเฉพาะโมดูลจัดเก็บประวัติการเงินและสรุปผลกำไร
+
+---
+
+## 🛠️ การเตรียมพร้อมสำหรับการรัน Test
+
+ให้ทำเปิดใช้งาน Virtual Environment ในเครื่อง และตรวจสอบว่าได้ติดตั้ง dependencies ทั้งหมดเรียบร้อยแล้ว:
 
 ```bash
+# ติดตั้ง dependencies สำหรับรันแอปและชุดทดสอบ
 pip install -r requirements.txt
 ```
 
-## รัน tests
+---
 
-รันทั้งหมด:
+## 🚀 วิธีการสั่งรันชุดทดสอบ (Test Execution)
 
+### 1. สั่งรันทดสอบระบบทั้งหมด
 ```bash
 pytest
 ```
 
-รันเฉพาะไฟล์:
-
+### 2. สั่งรันทดสอบแยกเฉพาะเจาะจงรายไฟล์
 ```bash
-pytest tests/test_sheets_client.py
+# ทดสอบชุดฟังก์ชันเครื่องมือของระบบ (log_sale, get_sales_today, get_sales_summary, get_sales_by_date)
+pytest tests/test_agent_tools.py
+
+# ทดสอบ CLI สำหรับการบันทึกยอดขาย
 pytest tests/test_sales_logger.py
+
+# ทดสอบระบบ RAG ค้นหาข้อมูลร้านค้าและสินค้า
+pytest tests/test_rag_engine.py
+
+# ทดสอบระบบรายงานสรุปยอดส่ง Telegram เช้า
 pytest tests/test_morning_report.py
+
+# ทดสอบฟังก์ชันเขียนแคปชั่น AI ด้วย Gemini
 pytest tests/test_caption_gen.py
+
+# ทดสอบไคลเอนต์เช็คอินเตอร์เฟสชีท
+pytest tests/test_sheets_client.py
 ```
 
-รันพร้อม coverage:
-
+### 3. สั่งรันพร้อมดูรายงานส่วนครอบคลุมโค้ด (Test Coverage)
 ```bash
+# รันพร้อมประเมินและจัดทำรายงานความครอบคลุมในรูปแบบ HTML
 pytest --cov=. --cov-report=html
 ```
+*รายงานสรุปผลจะถูกเขียนไว้ในโฟลเดอร์ `htmlcov/` สามารถเปิดไฟล์ `index.html` บนบราวเซอร์เพื่อดูความครอบคลุมของแต่ละบรรทัดได้*
 
-## CLI regression tests
+---
 
-`tests/test_cli_scripts.py` รันสคริปต์ด้วย `subprocess` จากโฟลเดอร์ `features/` เหมือนใช้งานจริง เช่น:
+## 🎯 โครงสร้างและจุดมุ่งหมายของแต่ละไฟล์ชุดทดสอบ
 
-```bash
-cd features
-python sales_logger.py "กาแฟ:2:45"
-python morning_report.py
-```
-
-test กลุ่มนี้ตั้งค่า environment ปลอมเพื่อไม่ยิง Google Sheets หรือ Telegram จริง แต่ยังจับปัญหา import path, current working directory และ bootstrap ของ CLI ได้
-
-## Timezone
-
-logic วันที่ของ `sales_logger.py` และ `morning_report.py` ใช้เวลาไทย `UTC+7` และมี assertion ใน test ว่าต้องเรียก `datetime.now(THAI_TZ)`
-
-## Integration test กับ Google Sheets
-
-มี test ที่ append row จริงลง worksheet ชื่อ `test` ใน Google Sheet ID เดียวกัน แล้วอ่านข้อมูลกลับมายืนยัน:
-
-```bash
-pytest tests/test_sheets_client.py -m integration
-```
-
-ต้องตั้งค่า credentials ใน `.env` หรือ environment ก่อนรัน:
-
-```bash
-GOOGLE_SHEETS_ID=<spreadsheet-id>
-GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json
-```
-
-ถ้าต้องการให้โค้ดหลักเขียนลง worksheet ชื่อ `test` โดยไม่ส่งชื่อ worksheet เข้า `get_sheet()` โดยตรง ให้ตั้งค่า:
-
-```bash
-GOOGLE_SHEETS_WORKSHEET=test
-```
-
-## โครงสร้าง
+ภายในโฟลเดอร์ `tests/` ประกอบด้วยไฟล์ชุดทดสอบที่มีขอบเขตเฉพาะเจาะจง ดังนี้:
 
 ```text
 tests/
 ├── __init__.py
-├── conftest.py              # Shared fixtures
-├── test_caption_gen.py      # Tests for Gemini caption generation
-├── test_cli_scripts.py      # Regression tests for real CLI execution paths
-├── test_morning_report.py   # Tests for sales summary and Telegram
-├── test_sales_logger.py     # Tests for sales logging CLI
-└── test_sheets_client.py    # Tests for Google Sheets client
+├── conftest.py                       # จุดรวบรวม Fixtures/Mocks ร่วมของระบบทดสอบ
+├── test_agent_tools.py               # ทดสอบ Logic ประมวลผลคลังรองเท้า, ยอดขาย และกำไรสุทธิ
+├── test_sales_logger.py              # ทดสอบ CLI parse ข้อความขายและจัดเก็บบันทึกทางการเงิน
+├── test_morning_report.py            # ทดสอบการคัดกรองสรุปรายงานส่ง Telegram ในช่วงเช้า
+├── test_caption_gen.py               # ทดสอบ API Gemini ในการร่างประโยคโฆษณาสินค้า
+├── test_sheets_client.py             # ทดสอบการเชื่อมต่อ API Google Sheets ความเร็วสูง
+└── test_cli_scripts.py               # Regression tests สำหรับสคริปต์การรัน CLI จริง
 ```
 
-## Coverage หลัก
+---
 
-- `caption_gen.py`: สร้าง caption ด้วย Gemini AI
-- `morning_report.py`: สรุปยอดขายรายวันและส่ง Telegram
-- `sales_logger.py`: parse รายการขายและบันทึกยอดขาย
-- `sheets_client.py`: เชื่อมต่อ Google Sheets API
+## 🔍 จุดเน้นสำคัญของชุดทดสอบที่เพิ่มความมั่นใจในการพัฒนา
 
-## CI/CD
+เราได้มีการออกแบบชุดทดสอบจำลอง (Mocking) ที่มีประสิทธิภาพสูงเพื่อจำลองการทำธุรกรรมจริงโดยไม่ต้องยิงเชื่อมต่อ Google Sheets API หรือคีย์จริง:
 
-ตัวอย่าง step สำหรับ GitHub Actions:
+### 1. การตรวจสอบสถานะสินค้าและการป้องกันการขายซ้ำ (`TestLogSaleStockValidation`)
+* อยู่ใน [tests/test_agent_tools.py](file:///d:/งาน/Software-Topic/Bittle%20Sneaker/Bittle-Sneaker/tests/test_agent_tools.py)
+* **จำลองสถานการณ์:**
+  * **กรณีสินค้าหมดสต๊อก:** ทดสอบว่าเมื่อลูกค้าสั่งซื้อสินค้าที่ไม่มีอยู่จริง ระบบต้องระงับธุรกรรมและขว้างข้อผิดพลาด `ValueError` แจ้งว่าสินค้าไม่มีในสต๊อก
+  * **ป้องกันการขายซ้ำ (Double Sale):** ทดสอบว่าเมื่อรหัสสินค้านั้นถูกบันทึกขายไปแล้ว (สถานะเป็น `"ขายแล้ว"`) ระบบต้องยกเลิกความพยายามบันทึกรอบสองทันที
+  * **ค้นหาด้วยรายละเอียดไม่พบ:** ทดสอบว่าหากระบบหาไซส์หรือรุ่นรองเท้าที่ลูกค้าต้องการไม่เจอในสต๊อกว่าง ต้องปฏิเสธและเตือนอย่างสมบูรณ์แบบ
+  * **ผ่านเงื่อนไขสมบูรณ์:** ทดสอบว่าหากทุกอย่างถูกต้อง บันทึกจะสำเร็จ และยืนยันว่าระบบเรียกคำสั่ง `update_cell` และ `append_row` ลง Google Sheets เพียงครั้งเดียว
 
-```yaml
-- name: Run tests
-  run: |
-    pip install -r requirements.txt
-    pytest
+### 2. การคำนวณและสรุปรายงานยอดขายพร้อมกำไรสุทธิ (`TestSalesSummaryAndProfit`)
+* อยู่ใน [tests/test_agent_tools.py](file:///d:/งาน/Software-Topic/Bittle%20Sneaker/Bittle-Sneaker/tests/test_agent_tools.py)
+* **จำลองสถานการณ์:**
+  * จำลองยอดขายและยอดกำไรของวันปัจจุบันลงบน Orders sheet
+  * ยืนยันว่า **`get_sales_today()`** สามารถคัดแยกเฉพาะยอดขายวันนี้ พร้อมคำนวณยอดขายรวม (`total_revenue`) และยอดกำไรรวม (`total_profit`) ออกมาได้อย่างถูกต้องไร้ข้อผิดพลาด
+  * ยืนยันว่า **`get_sales_summary(period="month")`** รวบรวมยอดขายและยอดกำไรรายคาบเวลาได้อย่างถูกต้องและมีโครงสร้างข้อมูลครบถ้วน
+  * ยืนยันว่า **`get_sales_by_date(date_str)`** ค้นหายอดประวัติย้อนหลังด้วยวันที่เฉพาะเจาะจง (เช่น ยอดขายของเมื่อวาน) ออกมาตรงกับข้อมูลทดสอบที่บันทึกไว้
+
+### 3. การทดสอบความถูกต้องของ CLI (`test_cli_scripts.py`)
+* เป็นการทดสอบย้อนกลับ (Regression Test) เพื่อดูการเชื่อมต่อและ bootstrap สภาพแวดล้อมเสมือนเวลาผู้ใช้สั่งการผ่าน CLI จริง
+* **อินพุตที่ปรับใช้ (Shoe Domain):**
+  - เปลี่ยนผ่านข้อความระบบทดสอบเดิมจาก Milklab (เช่นกาแฟ) มาเป็นโมเดลรองเท้า เช่นยิงคำสั่งบีบอัด `"NK-001:1:3500"` ไปรันเสมือนจริง โดยไม่มีการส่งผลกระทบต่อหน้าตาราง Google Sheets ของจริง
+
+---
+
+## 🕒 การจัดการทดสอบระดับ Timezone
+
+เพื่อสอดคล้องกับพฤติกรรมผู้บริโภคในไทย ระบบสรุปยอดของ `sales_logger.py`, `morning_report.py`, และ `agent_tools.py` จะถูกประเมินและตั้งค่าให้ตรวจสอบว่าเวลาปัจจุบันของระบบอิงตามเขตนครหลวงกรุงเทพฯ **`Asia/Bangkok`** เสมอ โดยการใส่ Assertions กวดขันใน Unit Tests ทุกรอบ
+
+---
+
+## 📡 ชุดการทดสอบจริงกับ API Google Sheets (Integration test)
+
+สำหรับนักพัฒนาที่ต้องการทดสอบการเขียนและอ่านไฟล์แถวจริงบน Google Sheets (เพื่อจำลองระดับ Latency และ Network):
+
+```bash
+# รัน Integration Test (ระบบจะจำลองเขียนแถวลงชีทชื่อ 'test' แล้วลบทิ้งอัตโนมัติ)
+pytest tests/test_sheets_client.py -m integration
 ```
+*จำเป็นต้องระบุคีย์ Google Credentials ในไฟล์ `.env` หรือสภาพแวดล้อมก่อนทำการสั่งรัน:
+* `GOOGLE_SHEETS_ID=<spreadsheet-id>`
+* `GOOGLE_SERVICE_ACCOUNT_FILE=service-account.json`
+* (ทางเลือก) `GOOGLE_SHEETS_WORKSHEET=test` (เพื่อระบุชีททดสอบแยกชั่วคราว)

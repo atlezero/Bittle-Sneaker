@@ -8,6 +8,8 @@ from google.oauth2.service_account import Credentials
 from features.agent_tools import (
     log_sale,
     get_sales_today,
+    get_sales_summary,
+    get_sales_by_date,
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -207,3 +209,54 @@ class TestLogSaleStockValidation:
         assert result["sku"] == "NK-001"
         mock_products_sheet.update_cell.assert_called_once()
         mock_orders_sheet.append_row.assert_called_once()
+
+
+class TestSalesSummaryAndProfit:
+    """Unit tests for get_sales_today and get_sales_summary profit calculations"""
+
+    @patch("features.agent_tools._get_sheet_safe")
+    def test_get_sales_today_and_summary_relational(self, mock_get_sheet):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        THAI_TZ = ZoneInfo("Asia/Bangkok")
+        today_str = datetime.now(THAI_TZ).date().isoformat()
+
+        mock_products_sheet = MagicMock()
+        mock_orders_sheet = MagicMock()
+        mock_products_sheet.id = "products-sheet-id"
+        mock_orders_sheet.id = "orders-sheet-id"
+
+        mock_products_sheet.get_all_records.return_value = [
+            {"รหัสสินค้า": "NK-001", "แบรนด์": "Nike", "รุ่น": "Dunk", "ไซส์ EU": "42"}
+        ]
+        mock_orders_sheet.get_all_records.return_value = [
+            {"วันที่ขาย": today_str, "รหัสสินค้า": "NK-001", "ราคาที่ขาย": 3500.0, "กำไร": 1200.0}
+        ]
+
+        def mock_get_sheet_side_effect(name):
+            if name == "Products":
+                return mock_products_sheet
+            elif name == "Orders":
+                return mock_orders_sheet
+            return MagicMock()
+
+        mock_get_sheet.side_effect = mock_get_sheet_side_effect
+
+        # Test today sales
+        today_res = get_sales_today()
+        assert today_res["status"] == "success"
+        assert today_res["total_revenue"] == 3500.0
+        assert today_res["total_profit"] == 1200.0
+
+        # Test summary sales
+        summary_res = get_sales_summary(period="month")
+        assert summary_res["status"] == "success"
+        assert summary_res["total_revenue"] == 3500.0
+        assert summary_res["total_profit"] == 1200.0
+
+        # Test sales by specific date
+        by_date_res = get_sales_by_date(date_str=today_str)
+        assert by_date_res["status"] == "success"
+        assert by_date_res["date"] == today_str
+        assert by_date_res["total_revenue"] == 3500.0
+        assert by_date_res["total_profit"] == 1200.0
