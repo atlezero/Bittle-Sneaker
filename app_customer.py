@@ -325,13 +325,6 @@ if prompt:
     # ค้นหารูปภาพสินค้าใน Google Drive ล่วงหน้าเฉพาะเมื่อลูกค้าขอดูรูปภาพจริงๆ เท่านั้น
     import re
     
-    # ดึงรหัสสินค้าทั้งหมดที่ถูกอ้างถึงในข้อความแชทล่าสุดของลูกค้า และในเนื้อหา RAG Context
-    codes = re.findall(r'[A-Za-z]{2}-\d{3}', prompt + "\n" + context)
-    unique_codes = sorted(list(set(code.upper() for code in codes)))
-    
-    image_results = []
-    image_status_lines = []
-    
     # ตรวจสอบเจตนาขอดูรูปภาพจริงของสินค้าชิ้นนั้นๆ เท่านั้น จากข้อความลูกค้า
     # คำยกเว้นเพื่อป้องกัน false positive ในภาษาไทย (เช่น สุภาพ, ดูดี, สุขภาพ, กายภาพ)
     exclusions = ["สุภาพ", "สุขภาพ", "คุณภาพ", "ประสิทธิภาพ", "กายภาพ", "ดูดี", "ดูเหมือน", "ดูแล้ว", "ดูแล", "เอ็นดู", "ดึงดูด", "หดหู่", "น่าดู"]
@@ -345,6 +338,38 @@ if prompt:
         "มีรูป", "มีภาพ", "ขอดู"
     ]
     ask_for_images = any(phrase in clean_prompt for phrase in intent_phrases)
+    
+    unique_codes = []
+    if ask_for_images:
+        # ดึงรหัสสินค้าที่ต้องการแสดงรูปภาพ
+        # 1. หาจาก prompt ก่อนเป็นอันดับแรก
+        prompt_codes = re.findall(r'[A-Za-z]{2}-\d{3}', prompt)
+        unique_codes = sorted(list(set(c.upper() for c in prompt_codes)))
+        
+        if not unique_codes:
+            # ตรวจสอบว่าผู้ใช้ระบุแบรนด์หรือรุ่นแบบเฉพาะเจาะจงใน Prompt หรือไม่
+            brands_and_models = ["nike", "adidas", "converse", "new balance", "asics", "samba", "jordan", "chicago", "supreme", "purcell", "kayano", "air max", "force", "990v5", "2002r", "jack"]
+            has_specific_product = any(item in prompt.lower() for item in brands_and_models)
+            
+            if not has_specific_product:
+                # ค้นหารหัสสินค้าจากประวัติสนทนาล่าสุด (สแกนย้อนหลังจากเทิร์นล่าสุด)
+                history_codes = []
+                for msg in reversed(st.session_state.messages[:-1]):
+                    found = re.findall(r'[A-Za-z]{2}-\d{3}', msg.get("content", ""))
+                    if found:
+                        history_codes.extend(found)
+                        break # ค้นพบเทิร์นล่าสุดที่มีรหัสสินค้าแล้ว ให้หยุด
+                
+                if history_codes:
+                    unique_codes = sorted(list(set(c.upper() for c in history_codes)))
+            
+            # หากยังไม่มีรหัสสินค้า หรือเป็นคำค้นหาแบรนด์/รุ่นเฉพาะเจาะจงใน Prompt ให้ดึงจาก prompt + RAG Context
+            if not unique_codes:
+                codes_in_rag = re.findall(r'[A-Za-z]{2}-\d{3}', prompt + "\n" + context)
+                unique_codes = sorted(list(set(c.upper() for c in codes_in_rag)))
+                
+    image_results = []
+    image_status_lines = []
     
     if ask_for_images:
         with st.spinner("Sandy กำลังค้นหาข้อมูลและรูปภาพสินค้า..."):
