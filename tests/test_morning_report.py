@@ -69,10 +69,9 @@ class TestBuildSummary:
         mock_datetime.now.assert_called_once_with(THAI_TZ)
         assert "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨" in result
         assert "ยอดรวมทั้งหมด: 740.00 บาท" in result
-        assert "Nike: 3 คู่" in result
-        assert "Adidas: 1 คู่" in result
-        assert "ขายดีที่สุด: Nike (3 คู่)" in result
-        assert "ขายได้น้อยที่สุด: Adidas (1 คู่)" in result
+        assert "Nike: 3 คู่ (ยอดขาย 450.00 บาท, กำไร 450.00 บาท)" in result
+        assert "Adidas: 1 คู่ (ยอดขาย 290.00 บาท, กำไร 290.00 บาท)" in result
+        assert "💸 กำไรทั้งหมด: 740.00 บาท" in result
 
     @patch("features.morning_report.datetime")
     def test_build_summary_no_sales(self, mock_datetime):
@@ -127,10 +126,70 @@ class TestBuildSummary:
         mock_datetime.now.assert_called_once_with(THAI_TZ)
         assert "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨" in result
         assert "ยอดรวมทั้งหมด: 3760.00 บาท" in result
-        assert "Nike (42): 2 คู่" in result
-        assert "Nike (43): 1 คู่" in result
-        assert "Adidas: 1 คู่" in result
-        assert "ขายดีที่สุด: Nike (42)" in result
+        assert "Nike (42): 2 คู่ (ยอดขาย 1580.00 บาท, กำไร 1580.00 บาท)" in result
+        assert "Nike (43): 1 คู่ (ยอดขาย 1890.00 บาท, กำไร 1890.00 บาท)" in result
+        assert "Adidas: 1 คู่ (ยอดขาย 290.00 บาท, กำไร 290.00 บาท)" in result
+        assert "💸 กำไรทั้งหมด: 3760.00 บาท" in result
+    @patch("features.morning_report.get_sheet")
+    @patch("features.morning_report.datetime")
+    def test_build_summary_with_profit_column(self, mock_datetime, mock_get_sheet):
+        # Mock datetime.now(THAI_TZ)
+        mock_now = datetime(2024, 1, 14, 8, 0, 0, tzinfo=THAI_TZ)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        mock_datetime.strptime.side_effect = datetime.strptime
+
+        # Mock Products sheet failure or return empty to avoid network hits
+        mock_get_sheet.side_effect = Exception("Mock sheet failure")
+
+        # Orders sheet style with "กำไร" column
+        rows = [
+            ["วันที่ขาย", "รหัสสินค้า", "ราคาที่ขาย", "กำไร"],
+            ["2024-01-13T10:00:00+07:00", "NK-001", "3500", "1200"],
+            ["2024-01-13T11:00:00+07:00", "AD-002", "2900", "900"],
+        ]
+
+        result = build_summary(rows)
+
+        assert "ยอดรวมทั้งหมด: 6400.00 บาท" in result
+        assert "💸 กำไรทั้งหมด: 2100.00 บาท" in result
+        assert "[NK-001]: 1 คู่ (ยอดขาย 3500.00 บาท, กำไร 1200.00 บาท)" in result
+        assert "[AD-002]: 1 คู่ (ยอดขาย 2900.00 บาท, กำไร 900.00 บาท)" in result
+
+    @patch("features.morning_report.get_sheet")
+    @patch("features.morning_report.datetime")
+    def test_build_summary_with_product_cost_join(self, mock_datetime, mock_get_sheet):
+        # Mock datetime.now(THAI_TZ)
+        mock_now = datetime(2024, 1, 14, 8, 0, 0, tzinfo=THAI_TZ)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        mock_datetime.strptime.side_effect = datetime.strptime
+
+        # Mock Products sheet to return cost prices
+        mock_products_sheet = Mock()
+        mock_products_sheet.get_all_records.return_value = [
+            {"รหัสสินค้า": "NK-001", "ราคาทุน": "2300", "แบรนด์": "Nike", "รุ่น": "Dunk"},
+            {"รหัสสินค้า": "AD-002", "ราคาทุน": "2000", "แบรนด์": "Adidas", "รุ่น": "Samba"},
+        ]
+        mock_get_sheet.return_value = mock_products_sheet
+
+        # Orders rows without profit column
+        rows = [
+            ["วันที่", "รหัสสินค้า", "จำนวน", "ยอดรวม"],
+            ["2024-01-13T10:00:00+07:00", "NK-001", "1", "3500"],
+            ["2024-01-13T11:00:00+07:00", "AD-002", "1", "2900"],
+        ]
+
+        result = build_summary(rows)
+
+        mock_get_sheet.assert_called_with("Products")
+        assert "ยอดรวมทั้งหมด: 6400.00 บาท" in result
+        # NK-001: price 3500, cost 2300 -> profit 1200
+        # AD-002: price 2900, cost 2000 -> profit 900
+        # Total profit = 2100
+        assert "💸 กำไรทั้งหมด: 2100.00 บาท" in result
+        assert "[NK-001] Nike Dunk: 1 คู่ (ยอดขาย 3500.00 บาท, กำไร 1200.00 บาท)" in result
+        assert "[AD-002] Adidas Samba: 1 คู่ (ยอดขาย 2900.00 บาท, กำไร 900.00 บาท)" in result
 
 
 class TestSendTelegramMessage:

@@ -259,14 +259,10 @@ def log_sale(
 
     # 1. จัดการข้อมูลสินค้า (Products)
     products = products_sheet.get_all_records()
-    if sku == "ไม่ระบุ":
-        prefix_code = brand[:2].upper() if brand and brand != "ไม่ระบุ" else "SKU"
-        sku = f"{prefix_code}-{len(products) + 1:03d}"
-
     cost_price = float(kwargs.get("cost_price", 0.0) or 0.0)
-    color = kwargs.get("color", "ไม่ระบุ")
-    condition = kwargs.get("condition", "ไม่ระบุ")
-    condition_details = kwargs.get("condition_details", "ไม่ระบุ")
+    cost_price_val = cost_price
+    found_row_idx = None
+    matched_sku = sku
 
     # แตกไซส์
     size_us = kwargs.get("size_us", "ไม่ระบุ")
@@ -277,41 +273,68 @@ def log_sale(
         else:
             size_eu = size
 
-    found_row_idx = None
-    cost_price_val = cost_price
-    for idx, p in enumerate(products):
-        if str(p.get("รหัสสินค้า", "")).strip() == sku:
-            found_row_idx = idx + 2
-            try:
-                cost_price_val = float(p.get("ราคาทุน", 0.0) or 0.0)
-            except ValueError:
-                pass
-            break
-
-    if found_row_idx:
-        status_col = EXPECTED_PRODUCTS_HEADERS.index("สถานะ") + 1
-        products_sheet.update_cell(found_row_idx, status_col, "ขายแล้ว")
+    # ทำการ Validate สต็อกสินค้าก่อนขาย
+    if sku != "ไม่ระบุ":
+        # กรณีระบุ SKU เจาะจง
+        for idx, p in enumerate(products):
+            if str(p.get("รหัสสินค้า", "")).strip() == sku:
+                found_row_idx = idx + 2
+                p_status = str(p.get("สถานะ", "")).strip()
+                if p_status == "ขายแล้ว":
+                    raise ValueError(f"สินค้าที่มีรหัส '{sku}' ถูกขายไปแล้ว ไม่สามารถขายซ้ำได้")
+                try:
+                    cost_price_val = float(p.get("ราคาทุน", 0.0) or 0.0)
+                except (ValueError, TypeError):
+                    pass
+                break
+        
+        if not found_row_idx:
+            raise ValueError(f"ไม่พบสินค้าที่มีรหัส '{sku}' ในสต็อก")
     else:
-        p_row = [
-            sku,
-            brand,
-            model,
-            color,
-            size_us,
-            size_eu,
-            condition,
-            condition_details,
-            cost_price,
-            price,
-            "ขายแล้ว",
-            kwargs.get("year", "ไม่ระบุ"),
-            kwargs.get("has_box", "ไม่ระบุ"),
-            kwargs.get("has_receipt", "ไม่ระบุ"),
-            kwargs.get("source_id", "ไม่ระบุ"),
-            kwargs.get("acquisition_date", now.strftime("%Y-%m-%d")),
-            kwargs.get("product_notes", "")
-        ]
-        products_sheet.append_row(p_row, value_input_option="RAW")
+        # กรณีไม่ได้ระบุ SKU (เช่น "ไม่ระบุ") แต่ระบุ แบรนด์, รุ่น, ไซส์
+        # ค้นหาสินค้าที่สถานะไม่ใช่ "ขายแล้ว" และตรงแบรนด์/รุ่น/ไซส์
+        for idx, p in enumerate(products):
+            p_status = str(p.get("สถานะ", "")).strip()
+            if p_status == "ขายแล้ว":
+                continue
+            
+            p_brand = str(p.get("แบรนด์", "")).strip().lower()
+            p_model = str(p.get("รุ่น", "")).strip().lower()
+            p_eu = str(p.get("ไซส์ EU", "")).strip().lower()
+            p_us = str(p.get("ไซส์ US", "")).strip().lower()
+            
+            brand_match = (brand.strip().lower() == p_brand) if brand != "ไม่ระบุ" else True
+            model_match = (model.strip().lower() == p_model) if model != "ไม่ระบุ" else True
+            
+            size_match = True
+            if size and size != "ทั่วไป" and size != "ไม่ระบุ":
+                sz_clean = size.strip().lower().replace("eu", "").replace("us", "").strip()
+                p_eu_clean = p_eu.replace("eu", "").strip()
+                p_us_clean = p_us.replace("us", "").strip()
+                size_match = (sz_clean == p_eu_clean or sz_clean == p_us_clean)
+
+            if brand_match and model_match and size_match:
+                found_row_idx = idx + 2
+                matched_sku = str(p.get("รหัสสินค้า", "")).strip()
+                try:
+                    cost_price_val = float(p.get("ราคาทุน", 0.0) or 0.0)
+                except (ValueError, TypeError):
+                    pass
+                break
+                
+        if not found_row_idx:
+            desc_parts = []
+            if brand != "ไม่ระบุ": desc_parts.append(brand)
+            if model != "ไม่ระบุ": desc_parts.append(model)
+            if size != "ทั่วไป" and size != "ไม่ระบุ": desc_parts.append(f"ไซส์ {size}")
+            desc = " ".join(desc_parts) or "สินค้า"
+            raise ValueError(f"ไม่พบ '{desc}' ที่พร้อมขายในสต็อก")
+        
+        sku = matched_sku
+
+    # อัปเดตสถานะสินค้าในสต็อกเป็น "ขายแล้ว"
+    status_col = EXPECTED_PRODUCTS_HEADERS.index("สถานะ") + 1
+    products_sheet.update_cell(found_row_idx, status_col, "ขายแล้ว")
 
     # 2. จัดการข้อมูลลูกค้า (Customers)
     customers = customers_sheet.get_all_records()
@@ -575,6 +598,124 @@ def get_sales_today() -> dict:
     }
 
 
+def check_stock(
+    brand: str = None,
+    model: str = None,
+    size: str = None,
+) -> dict:
+    """
+    ตรวจสอบสต็อกรองเท้าที่มีสถานะว่าง / พร้อมส่ง (คัดกรองเฉพาะสินค้าที่สถานะไม่ใช่ "ขายแล้ว")
+    """
+    products_sheet = _get_sheet_safe("Products")
+    products = products_sheet.get_all_records()
+    
+    in_stock = []
+    for p in products:
+        status = str(p.get("สถานะ", "")).strip()
+        if status == "ขายแล้ว":
+            continue
+            
+        # ค้นฟิลเตอร์แบรนด์ (Case-insensitive & Partial Match)
+        if brand and brand.strip():
+            p_brand = str(p.get("แบรนด์", "")).strip().lower()
+            if brand.strip().lower() not in p_brand:
+                continue
+                
+        # ค้นฟิลเตอร์รุ่น (Case-insensitive & Partial Match)
+        if model and model.strip():
+            p_model = str(p.get("รุ่น", "")).strip().lower()
+            if model.strip().lower() not in p_model:
+                continue
+                
+        # ค้นฟิลเตอร์ไซส์ (เช็กทั้ง ไซส์ EU และ ไซส์ US แบบ case-insensitive)
+        if size and size.strip():
+            target_size = size.strip().lower().replace("eu", "").replace("us", "").strip()
+            p_eu = str(p.get("ไซส์ EU", "")).strip().lower().replace("eu", "").strip()
+            p_us = str(p.get("ไซส์ US", "")).strip().lower().replace("us", "").strip()
+            
+            # Match แบบมี/ไม่มีหน่วย EU/US
+            if target_size not in p_eu and target_size not in p_us:
+                continue
+                
+        in_stock.append(p)
+        
+    return {
+        "status": "success",
+        "count": len(in_stock),
+        "products": in_stock
+    }
+
+
+def generate_social_caption(
+    product_name: str,
+    price: float,
+) -> dict:
+    """
+    สร้างแคปชั่นขายของด้วย AI (Cute, Minimal, Gen-Z) โดยดึงจาก caption_gen.py
+    """
+    from features.caption_gen import generate_captions
+    
+    try:
+        captions = generate_captions(product_name, int(price))
+        return {
+            "status": "success",
+            "product_name": product_name,
+            "price": price,
+            "captions": captions
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+def get_customer_profile(
+    name: str = None,
+    ig: str = None,
+    line: str = None,
+    phone: str = None,
+) -> dict:
+    """
+    ค้นหาข้อมูลลูกค้าและประวัติยอดสั่งซื้อสะสม
+    """
+    customers_sheet = _get_sheet_safe("Customers")
+    customers = customers_sheet.get_all_records()
+    
+    found_customers = []
+    
+    # ปรับแต่งคำค้นหาเพื่อใช้เปรียบเทียบ
+    q_name = name.strip().lower() if name else None
+    q_ig = ig.strip().lower().replace("@", "") if ig else None
+    q_line = line.strip().lower() if line else None
+    q_phone = phone.strip().replace("-", "").replace(" ", "") if phone else None
+    
+    for c in customers:
+        c_name = str(c.get("ชื่อ", "")).strip().lower()
+        c_ig = str(c.get("IG", "")).strip().lower().replace("@", "")
+        c_line = str(c.get("Line ID", "")).strip().lower()
+        c_phone = str(c.get("เบอร์โทร", "")).strip().replace("-", "").replace(" ", "")
+        
+        match = False
+        if q_name and q_name in c_name:
+            match = True
+        elif q_ig and q_ig in c_ig:
+            match = True
+        elif q_line and q_line in c_line:
+            match = True
+        elif q_phone and q_phone in c_phone:
+            match = True
+            
+        if match:
+            found_customers.append(c)
+            
+    return {
+        "status": "success",
+        "count": len(found_customers),
+        "customers": found_customers
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # Registry
 # ─────────────────────────────────────────────────────────────
@@ -582,4 +723,7 @@ def get_sales_today() -> dict:
 TOOLS = {
     "log_sale": log_sale,
     "get_sales_today": get_sales_today,
+    "check_stock": check_stock,
+    "generate_social_caption": generate_social_caption,
+    "get_customer_profile": get_customer_profile,
 }

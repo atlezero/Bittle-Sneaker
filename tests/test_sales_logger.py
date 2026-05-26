@@ -1,5 +1,4 @@
 from unittest.mock import patch, MagicMock
-
 import pytest
 
 from features.sales_logger import THAI_TZ, parse_sale_item, main
@@ -10,45 +9,42 @@ class TestParseSaleItem:
 
     def test_parse_sale_item_valid_input(self):
         """Test parsing valid sale item string"""
-        result = parse_sale_item("Nike:2:150.0")
-        assert result == ("Nike", 2, 150.0)
+        result = parse_sale_item("NK-001:3500.0:IG")
+        assert result == ("NK-001", 3500.0, "IG")
 
     def test_parse_sale_item_with_spaces(self):
         """Test parsing sale item with extra spaces"""
-        result = parse_sale_item("  Nike  :  2  :  150.0  ")
-        assert result == ("Nike", 2, 150.0)
+        result = parse_sale_item("  NK-001  :  3500.0  :  IG  ")
+        assert result == ("NK-001", 3500.0, "IG")
 
     def test_parse_sale_item_invalid_format(self):
         """Test parsing invalid format (not 3 parts)"""
-        with pytest.raises(ValueError, match="รูปแบบต้องเป็น เมนู:จำนวน:ราคา"):
-            parse_sale_item("Nike:2")
+        with pytest.raises(ValueError, match="รูปแบบต้องเป็น รหัสสินค้า:ราคาที่ขาย:ช่องทางขาย"):
+            parse_sale_item("NK-001:3500")
 
-        with pytest.raises(ValueError, match="รูปแบบต้องเป็น เมนู:จำนวน:ราคา"):
-            parse_sale_item("Nike:2:150:extra")
+        with pytest.raises(ValueError, match="รูปแบบต้องเป็น รหัสสินค้า:ราคาที่ขาย:ช่องทางขาย"):
+            parse_sale_item("NK-001:3500:IG:extra")
 
-    def test_parse_sale_item_empty_menu(self):
-        """Test parsing with empty menu name"""
-        with pytest.raises(ValueError, match="ชื่อเมนูไม่สามารถเว้นว่างได้"):
-            parse_sale_item(":2:150")
+    def test_parse_sale_item_empty_sku(self):
+        """Test parsing with empty SKU"""
+        with pytest.raises(ValueError, match="รหัสสินค้าไม่สามารถเว้นว่างได้"):
+            parse_sale_item(":3500:IG")
 
-        with pytest.raises(ValueError, match="ชื่อเมนูไม่สามารถเว้นว่างได้"):
-            parse_sale_item("   :2:150")
+        with pytest.raises(ValueError, match="รหัสสินค้าไม่สามารถเว้นว่างได้"):
+            parse_sale_item("   :3500:IG")
 
-    def test_parse_sale_item_invalid_quantity(self):
-        """Test parsing with invalid quantity"""
-        with pytest.raises(ValueError, match="จำนวนต้องเป็นจำนวนเต็ม"):
-            parse_sale_item("Nike:สอง:150")
+    def test_parse_sale_item_empty_channel(self):
+        """Test parsing with empty channel"""
+        with pytest.raises(ValueError, match="ช่องทางขายไม่สามารถเว้นว่างได้"):
+            parse_sale_item("NK-001:3500:")
 
-        with pytest.raises(ValueError, match="จำนวนต้องเป็นจำนวนเต็ม"):
-            parse_sale_item("Nike:2.5:150")
+        with pytest.raises(ValueError, match="ช่องทางขายไม่สามารถเว้นว่างได้"):
+            parse_sale_item("NK-001:3500:   ")
 
     def test_parse_sale_item_invalid_price(self):
         """Test parsing with invalid price"""
         with pytest.raises(ValueError, match="ราคาต้องเป็นตัวเลข"):
-            parse_sale_item("Nike:2:หนึ่งร้อยห้าสิบ")
-
-        with pytest.raises(ValueError, match="ราคาต้องเป็นตัวเลข"):
-            parse_sale_item("Nike:2:abc")
+            parse_sale_item("NK-001:abc:IG")
 
 
 class TestMainFunction:
@@ -58,10 +54,8 @@ class TestMainFunction:
     @patch("features.sales_logger.argparse.ArgumentParser.parse_args")
     @patch("features.sales_logger.parse_sale_item")
     @patch("features.sales_logger.log_sale")
-    @patch("features.sales_logger.datetime")
     def test_main_success(
         self,
-        mock_datetime,
         mock_log_sale,
         mock_parse_sale,
         mock_parse_args,
@@ -69,16 +63,17 @@ class TestMainFunction:
     ):
         """Test successful execution of main function"""
         # Setup mocks
-        mock_parse_args.return_value = MagicMock(sale="Nike:2:150")
-        mock_parse_sale.return_value = ("Nike", 2, 150.0)
-        # Mock .now(THAI_TZ).isoformat()
-        mock_iso_timestamp = "2024-01-01T12:00:00.000000+07:00"
-        mock_datetime.now.return_value.isoformat.return_value = mock_iso_timestamp
+        mock_parse_args.return_value = MagicMock(sale="NK-001:3500:IG")
+        mock_parse_sale.return_value = ("NK-001", 3500.0, "IG")
         
+        mock_iso_timestamp = "2024-01-01T12:00:00.000000+07:00"
         mock_log_sale.return_value = {
             "status": "success",
             "timestamp": mock_iso_timestamp,
-            "total": 300.0
+            "brand": "Nike",
+            "model": "Dunk",
+            "size": "42",
+            "total": 3500.0
         }
 
         # Call function
@@ -86,14 +81,11 @@ class TestMainFunction:
 
         # Assertions
         assert result == 0
-        mock_datetime.now.assert_called_once_with(THAI_TZ)
         mock_log_sale.assert_called_once_with(
-            sku="ไม่ระบุ",
-            brand="Nike",
-            model="ทั่วไป",
-            size="ทั่วไป",
-            quantity=2,
-            price=150.0
+            sku="NK-001",
+            price=3500.0,
+            sales_channel="IG",
+            quantity=1
         )
 
     @patch("features.sales_logger.load_dotenv")
@@ -120,8 +112,8 @@ class TestMainFunction:
     def test_main_sheet_error(self, mock_log_sale, mock_parse_sale, mock_parse_args, mock_load_dotenv, capsys):
         """Test main function with sheet connection error"""
         # Setup mocks
-        mock_parse_args.return_value = MagicMock(sale="Nike:2:150")
-        mock_parse_sale.return_value = ("Nike", 2, 150.0)
+        mock_parse_args.return_value = MagicMock(sale="NK-001:3500:IG")
+        mock_parse_sale.return_value = ("NK-001", 3500.0, "IG")
         mock_log_sale.side_effect = RuntimeError("Sheet error")
 
         # Call function
@@ -131,4 +123,3 @@ class TestMainFunction:
         assert result == 1
         captured = capsys.readouterr()
         assert "ข้อผิดพลาด: Sheet error" in captured.err
-

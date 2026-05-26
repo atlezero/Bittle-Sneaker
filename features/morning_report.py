@@ -68,6 +68,7 @@ def build_summary(rows: list[list[str]]) -> str:
     
     quantity_col = find_column(headers, ["quantity", "จำนวน", "qty"])
     total_col = find_column(headers, ["total", "ยอดรวม", "amount", "ราคาที่ขาย"])
+    profit_col = find_column(headers, ["กำไร", "profit"])
 
     if date_col is None or (menu_col is None and brand_col is None and sku_col is None):
         return (
@@ -165,24 +166,36 @@ def build_summary(rows: list[list[str]]) -> str:
                     price = 0.0
             total = quantity * price
 
-        filtered.append((menu, quantity, total))
+        profit = 0.0
+        if profit_col is not None and len(row) > profit_col:
+            try:
+                profit = float(row[profit_col])
+            except ValueError:
+                profit = 0.0
+        else:
+            cost_price = 0.0
+            if sku and sku in sku_to_product:
+                try:
+                    cost_price = float(sku_to_product[sku].get("ราคาทุน", 0.0))
+                except (ValueError, TypeError):
+                    cost_price = 0.0
+            profit = total - (cost_price * quantity)
+
+        filtered.append((menu, quantity, total, profit))
 
 
     if not filtered:
         return f"เมื่อวาน ({yesterday}) ยังไม่มียอดขายเลยค่ะ 🥲"
 
     total_sales = sum(item[2] for item in filtered)
+    total_profit = sum(item[3] for item in filtered)
     menu_counter = Counter()
     quantity_counter = Counter()
-    for menu, quantity, total in filtered:
+    profit_counter = Counter()
+    for menu, quantity, total, profit in filtered:
         menu_counter[menu] += total
         quantity_counter[menu] += quantity
-
-    best_menu = quantity_counter.most_common(1)[0]
-    best_menu_name, best_menu_quantity = best_menu
-
-    best_revenue_menu = menu_counter.most_common(1)[0]
-    best_revenue_name, best_revenue_amount = best_revenue_menu
+        profit_counter[menu] += profit
 
     lines = [
         "สรุปยอดขายรองเท้าเมื่อวันวานน้า~ 👟✨",
@@ -194,22 +207,12 @@ def build_summary(rows: list[list[str]]) -> str:
     for menu in sorted(quantity_counter.keys()):
         qty = quantity_counter[menu]
         rev = menu_counter[menu]
-        lines.append(f"• {menu}: {qty} คู่ ({rev:.2f} บาท)")
+        prof = profit_counter[menu]
+        lines.append(f"• {menu}: {qty} คู่ (ยอดขาย {rev:.2f} บาท, กำไร {prof:.2f} บาท)")
 
     lines.append("---")
     lines.append(f"💰 ยอดรวมทั้งหมด: {total_sales:.2f} บาท")
-    lines.append(f"🏆 ขายดีที่สุด: {best_menu_name} ({best_menu_quantity} คู่)")
-
-    if len(quantity_counter) > 1:
-        min_qty = min(quantity_counter.values())
-        least_menus = sorted([menu for menu, qty in quantity_counter.items() if qty == min_qty])
-        least_menu_str = ", ".join(least_menus)
-        lines.append(f"📉 ขายได้น้อยที่สุด: {least_menu_str} ({min_qty} คู่)")
-
-    if best_revenue_name != best_menu_name:
-        lines.append(f"💎 ทำเงินมากสุด: {best_revenue_name} ({best_revenue_amount:.2f} บาท)")
-
-
+    lines.append(f"💸 กำไรทั้งหมด: {total_profit:.2f} บาท")
     lines.append("ขอบคุณที่ดูแลร้านนะคะ 💕")
     return "\n".join(lines)
 

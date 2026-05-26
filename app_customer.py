@@ -42,7 +42,7 @@ from features.drive_client import get_product_images_for_text, find_product_imag
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-3.1-flash-lite-preview"
+MODEL = "gemini-3.1-flash-lite"
 
 # ── Session & memory setup ────────────────────────────────────
 if "session_id" not in st.session_state:

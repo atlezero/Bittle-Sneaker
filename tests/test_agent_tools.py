@@ -94,3 +94,116 @@ def test_get_sales_today():
     assert "total_revenue" in result
     assert "total_items" in result
     assert "menu_summary" in result
+
+
+class TestLogSaleStockValidation:
+    """Unit tests for stock validation in log_sale (relational mode)"""
+
+    @patch("features.agent_tools._get_sheet_safe")
+    def test_log_sale_sku_not_in_stock(self, mock_get_sheet):
+        mock_products_sheet = MagicMock()
+        mock_orders_sheet = MagicMock()
+        mock_products_sheet.id = "products-sheet-id"
+        mock_orders_sheet.id = "orders-sheet-id"
+        mock_products_sheet.get_all_records.return_value = []
+        
+        def mock_get_sheet_side_effect(name):
+            if name == "Products":
+                return mock_products_sheet
+            elif name == "Orders":
+                return mock_orders_sheet
+            return MagicMock()
+            
+        mock_get_sheet.side_effect = mock_get_sheet_side_effect
+
+        with pytest.raises(ValueError, match="ไม่พบสินค้าที่มีรหัส 'NK-001' ในสต็อก"):
+            log_sale(
+                sku="NK-001",
+                quantity=1,
+                price=3500.0,
+            )
+
+    @patch("features.agent_tools._get_sheet_safe")
+    def test_log_sale_sku_already_sold(self, mock_get_sheet):
+        mock_products_sheet = MagicMock()
+        mock_orders_sheet = MagicMock()
+        mock_products_sheet.id = "products-sheet-id"
+        mock_orders_sheet.id = "orders-sheet-id"
+        mock_products_sheet.get_all_records.return_value = [
+            {"รหัสสินค้า": "NK-001", "สถานะ": "ขายแล้ว", "ราคาทุน": 2000.0}
+        ]
+        
+        def mock_get_sheet_side_effect(name):
+            if name == "Products":
+                return mock_products_sheet
+            elif name == "Orders":
+                return mock_orders_sheet
+            return MagicMock()
+            
+        mock_get_sheet.side_effect = mock_get_sheet_side_effect
+
+        with pytest.raises(ValueError, match="สินค้าที่มีรหัส 'NK-001' ถูกขายไปแล้ว"):
+            log_sale(
+                sku="NK-001",
+                quantity=1,
+                price=3500.0,
+            )
+
+    @patch("features.agent_tools._get_sheet_safe")
+    def test_log_sale_by_description_not_found(self, mock_get_sheet):
+        mock_products_sheet = MagicMock()
+        mock_orders_sheet = MagicMock()
+        mock_products_sheet.id = "products-sheet-id"
+        mock_orders_sheet.id = "orders-sheet-id"
+        mock_products_sheet.get_all_records.return_value = [
+            {"รหัสสินค้า": "NK-001", "แบรนด์": "Adidas", "รุ่น": "Samba", "ไซส์ EU": "42", "สถานะ": "ว่าง"}
+        ]
+        
+        def mock_get_sheet_side_effect(name):
+            if name == "Products":
+                return mock_products_sheet
+            elif name == "Orders":
+                return mock_orders_sheet
+            return MagicMock()
+            
+        mock_get_sheet.side_effect = mock_get_sheet_side_effect
+
+        with pytest.raises(ValueError, match="ไม่พบ 'Nike Dunk ไซส์ 42' ที่พร้อมขายในสต็อก"):
+            log_sale(
+                sku="ไม่ระบุ",
+                brand="Nike",
+                model="Dunk",
+                size="42",
+                quantity=1,
+                price=3500.0,
+            )
+
+    @patch("features.agent_tools._get_sheet_safe")
+    def test_log_sale_successful_validation(self, mock_get_sheet):
+        mock_products_sheet = MagicMock()
+        mock_orders_sheet = MagicMock()
+        mock_products_sheet.id = "products-sheet-id"
+        mock_orders_sheet.id = "orders-sheet-id"
+        mock_products_sheet.get_all_records.return_value = [
+            {"รหัสสินค้า": "NK-001", "แบรนด์": "Nike", "รุ่น": "Dunk", "ไซส์ EU": "42", "สถานะ": "ว่าง", "ราคาทุน": 2000.0}
+        ]
+        
+        def mock_get_sheet_side_effect(name):
+            if name == "Products":
+                return mock_products_sheet
+            elif name == "Orders":
+                return mock_orders_sheet
+            return MagicMock()
+            
+        mock_get_sheet.side_effect = mock_get_sheet_side_effect
+
+        result = log_sale(
+            sku="NK-001",
+            quantity=1,
+            price=3500.0,
+        )
+
+        assert result["status"] == "success"
+        assert result["sku"] == "NK-001"
+        mock_products_sheet.update_cell.assert_called_once()
+        mock_orders_sheet.append_row.assert_called_once()
